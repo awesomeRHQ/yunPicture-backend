@@ -1,0 +1,32 @@
+server:
+  port: 8100
+  servlet:
+    context-path: /yunp
+spring:
+  application:
+    name: yunPicture-backend
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/yun_picture
+    username: root
+    password: ren440402
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: false
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: isDelete
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+knife4j:
+  enable: true
+  openapi:
+    title: yunPicture接口文档
+    version: v1.0
+    group:
+      test1:
+        group-name: default
+        api-rule: package
+        api-rule-resources:
+          - com.awesome.yunpicturebackend.controller
