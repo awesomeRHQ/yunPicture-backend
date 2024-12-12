@@ -10,6 +10,9 @@ spring:
     url: jdbc:mysql://localhost:3306/yun_picture
     username: root
     password: ren440402
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: false

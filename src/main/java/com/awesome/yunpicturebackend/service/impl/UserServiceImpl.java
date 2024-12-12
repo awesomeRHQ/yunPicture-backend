@@ -1,16 +1,29 @@
 package com.awesome.yunpicturebackend.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.awesome.yunpicturebackend.common.ResponseCode;
+import com.awesome.yunpicturebackend.constants.UserConstant;
 import com.awesome.yunpicturebackend.exception.BusinessException;
+import com.awesome.yunpicturebackend.exception.ThrowUtil;
+import com.awesome.yunpicturebackend.model.dto.user.UserQueryRequest;
+import com.awesome.yunpicturebackend.model.enums.SortOrderEnum;
 import com.awesome.yunpicturebackend.model.enums.UserRoleEnum;
+import com.awesome.yunpicturebackend.model.vo.user.LoginUserVO;
+import com.awesome.yunpicturebackend.model.vo.user.UserVO;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.awesome.yunpicturebackend.model.entity.User;
 import com.awesome.yunpicturebackend.service.UserService;
 import com.awesome.yunpicturebackend.mapper.UserMapper;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
+
+import javax.servlet.http.HttpServletRequest;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
 * @author awesome
@@ -18,6 +31,7 @@ import org.springframework.util.DigestUtils;
 * @createDate 2024-12-11 19:06:03
 */
 @Service
+@Slf4j
 public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     implements UserService{
 
@@ -66,8 +80,125 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         }catch (RuntimeException e){
             throw new BusinessException(ResponseCode.SYSTEM_ERROR,"注册，数据库插入错误");
         }
-
+        // 5.返回
         return newUser.getId();
+    }
+
+    /**
+     * 用户登录
+     * @param userAccount 用户账号
+     * @param userPassword 用户密码
+     * @return 脱敏用户
+     */
+    @Override
+    public LoginUserVO userLogin(String userAccount, String userPassword, HttpServletRequest request) {
+        // 1.参数校验
+        if(StrUtil.hasBlank(userAccount,userPassword)){
+            throw new BusinessException(ResponseCode.PARAMS_ERROR, "账号或密码为空");
+        }
+        // 2.查询用户是否存在
+        // 加密密码
+        String encryptedPassword = getEncryptedPassword(userPassword);
+        QueryWrapper<User> userQueryWrapper = new QueryWrapper<>();
+        userQueryWrapper.eq("userAccount",userAccount).eq("userPassword",encryptedPassword);
+        User user = this.getOne(userQueryWrapper);
+        if (user == null){
+            log.info("user login fail: course by user not found");
+            throw new BusinessException(ResponseCode.NOT_FOUND_ERROR,"用户不存在或密码为空");
+        }
+        // 3.存在则保存用户登录态
+        request.getSession().setAttribute(UserConstant.USER_LOGIN_STATE,user);
+        return getLoginUserVO(user);
+    }
+
+    /**
+     * 获取当前登录用户
+     * @param request
+     * @return 当前登录用户
+     */
+    @Override
+    public User getLoginUser(HttpServletRequest request){
+        // 从缓存中获取当前用户
+        User currentUser = (User) request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE);;
+        ThrowUtil.throwIf(currentUser == null || currentUser.getId() == null,ResponseCode.NOT_FOUND_ERROR, "当前用户在session中不存在");
+        // 追求性能可以注释
+        currentUser = this.getById(currentUser.getId());
+        ThrowUtil.throwIf(currentUser == null ,ResponseCode.NOT_FOUND_ERROR, "当前用户在数据库中不存在");
+        return currentUser;
+    }
+
+    /**
+     * 用户注销
+     */
+    @Override
+    public boolean userLogout(HttpServletRequest request) {
+        User currentUser = (User) request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE);
+        ThrowUtil.throwIf(currentUser == null,ResponseCode.NOT_FOUND_ERROR, "未登录");
+        request.getSession().removeAttribute(UserConstant.USER_LOGIN_STATE);
+        return true;
+    }
+
+    /**
+     * 登录后获取脱敏用户
+     * @param user 当前用户
+     * @return 脱敏后用户
+     */
+    @Override
+    public LoginUserVO getLoginUserVO(User user) {
+        LoginUserVO loginUserVO = new LoginUserVO();
+        BeanUtils.copyProperties(user,loginUserVO);
+        return loginUserVO;
+    }
+
+    /**
+     * 获取脱敏用户
+     * @param user 当前用户
+     * @return 脱敏后用户
+     */
+    @Override
+    public UserVO getUserVO(User user) {
+        return BeanUtil.copyProperties(user,UserVO.class);
+    }
+
+    /**
+     * 获取脱敏用户列表
+     * @param userList 用户列表
+     * @return 脱敏后用户列表
+     */
+    @Override
+    public List<UserVO> getUserVOList(List<User> userList) {
+        if (userList.isEmpty()){
+            return null;
+        }
+        List<UserVO> userVOList = userList.stream().map(this::getUserVO).collect(Collectors.toList());
+        return userVOList;
+    }
+
+    /**
+     * 拼接查询条件
+     * @param userQueryRequest 查询请求类
+     * @return
+     */
+    @Override
+    public QueryWrapper<User> getQueryWrapper(UserQueryRequest userQueryRequest) {
+        // 1.校验参数
+        ThrowUtil.throwIf(userQueryRequest == null, ResponseCode.PARAMS_ERROR, "查询参数为空");
+        // 2.获取字段
+        Long id = userQueryRequest.getId();
+        String userAccount = userQueryRequest.getUserAccount();
+        String userName = userQueryRequest.getUserName();
+        String userRole = userQueryRequest.getUserRole();
+        String sortField = userQueryRequest.getSortField();
+        String sortOrder = userQueryRequest.getSortOrder();
+        // 3.拼接查询条件
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq(id != null && id > 0 ,"id", id);
+        queryWrapper.like(StrUtil.isNotBlank(userAccount),"userAccount",userAccount);
+        queryWrapper.like(StrUtil.isNotBlank(userName),"userName",userName);
+        queryWrapper.eq(StrUtil.isNotBlank(userRole),"userRole",userRole);
+        queryWrapper.orderBy(StrUtil.isNotBlank(sortField),sortOrder.equals(SortOrderEnum.ASC.getValue()),sortOrder);
+        // 4.返回
+        return queryWrapper;
     }
 
     /**
