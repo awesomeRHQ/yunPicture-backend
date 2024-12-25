@@ -71,6 +71,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         newUser.setUserAccount(userAccount);
         newUser.setUserPassword(encryptedPassword);
         newUser.setUserName("用户"+userAccount);
+        newUser.setUserAvatar(UserConstant.USER_DEFAULT_AVATAR);
         newUser.setUserRole(UserRoleEnum.USER.getValue());
         try {
             boolean result = this.save(newUser);
@@ -104,7 +105,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         User user = this.getOne(userQueryWrapper);
         if (user == null){
             log.info("user login fail: course by user not found");
-            throw new BusinessException(ResponseCode.NOT_FOUND_ERROR,"用户不存在或密码为空");
+            throw new BusinessException(ResponseCode.NOT_FOUND_ERROR,"账号或密码错误");
         }
         // 3.存在则保存用户登录态
         request.getSession().setAttribute(UserConstant.USER_LOGIN_STATE,user);
@@ -121,7 +122,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         // 从缓存中获取当前用户
         User currentUser = (User) request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE);;
         ThrowUtil.throwIf(currentUser == null || currentUser.getId() == null,ResponseCode.NOT_FOUND_ERROR, "当前用户在session中不存在");
-        // 追求性能可以注释
+        // todo 追求性能可以注释
         currentUser = this.getById(currentUser.getId());
         ThrowUtil.throwIf(currentUser == null ,ResponseCode.NOT_FOUND_ERROR, "当前用户在数据库中不存在");
         return currentUser;
@@ -161,6 +162,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     }
 
     /**
+     * 通过用户id获取脱敏用户
+     * @param id 用户id
+     * @return
+     */
+    @Override
+    public UserVO getUserVO(Long id) {
+        if(id == null || id == 0){
+            return null;
+        }
+        User user = this.getById(id);
+        return getUserVO(user);
+    }
+
+    /**
      * 获取脱敏用户列表
      * @param userList 用户列表
      * @return 脱敏后用户列表
@@ -192,13 +207,27 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         String sortOrder = userQueryRequest.getSortOrder();
         // 3.拼接查询条件
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq(id != null && id > 0 ,"id", id);
+        queryWrapper.like(id != null && id > 0 ,"id", id);
         queryWrapper.like(StrUtil.isNotBlank(userAccount),"userAccount",userAccount);
         queryWrapper.like(StrUtil.isNotBlank(userName),"userName",userName);
         queryWrapper.eq(StrUtil.isNotBlank(userRole),"userRole",userRole);
-        queryWrapper.orderBy(StrUtil.isNotBlank(sortField),sortOrder.equals(SortOrderEnum.ASC.getValue()),sortOrder);
+        queryWrapper.orderBy(StrUtil.isNotBlank(sortField),sortOrder.equals(SortOrderEnum.ASC.getValue()),sortField);
         // 4.返回
         return queryWrapper;
+    }
+
+    /**
+     * 判断当前用户是否为管理员
+     * @param user 当前用户
+     * @return
+     */
+    @Override
+    public boolean isAdmin(User user) {
+        if (user == null){
+            return false;
+        } else {
+            return UserRoleEnum.ADMIN.getValue().equals(user.getUserRole());
+        }
     }
 
     /**

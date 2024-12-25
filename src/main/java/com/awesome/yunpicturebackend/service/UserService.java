@@ -61,6 +61,13 @@ public interface UserService extends IService<User> {
     UserVO getUserVO(User user);
 
     /**
+     * 通过用户id获取脱敏用户
+     * @param id 用户id
+     * @return
+     */
+    UserVO getUserVO(Long id);
+
+    /**
      * 获取脱敏用户列表
      * @param userList 用户列表
      * @return 脱敏后用户列表
@@ -74,6 +81,12 @@ public interface UserService extends IService<User> {
      */
     QueryWrapper<User> getQueryWrapper(UserQueryRequest userQueryRequest);
 
+    /**
+     * 判断当前用户是否为管理员
+     * @param user 当前用户
+     * @return
+     */
+    boolean isAdmin(User user);
 
     /**
      * 密码加密

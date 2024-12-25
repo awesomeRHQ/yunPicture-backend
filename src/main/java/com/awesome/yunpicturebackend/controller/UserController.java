@@ -3,6 +3,7 @@ package com.awesome.yunpicturebackend.controller;
 import cn.hutool.core.bean.BeanUtil;
 import com.awesome.yunpicturebackend.annotation.AuthCheck;
 import com.awesome.yunpicturebackend.common.BaseResponse;
+import com.awesome.yunpicturebackend.common.DeleteRequest;
 import com.awesome.yunpicturebackend.common.ResponseCode;
 import com.awesome.yunpicturebackend.common.utils.ResultUtil;
 import com.awesome.yunpicturebackend.exception.ThrowUtil;
@@ -80,6 +81,13 @@ public class UserController {
     }
 
     @AuthCheck(mustRole = "admin")
+    @PostMapping("/delete")
+    public BaseResponse<Boolean> deleteUser(@RequestBody DeleteRequest deleteRequest){
+        ThrowUtil.throwIf(deleteRequest == null, ResponseCode.PARAMS_ERROR);
+        return ResultUtil.success(userService.removeById(deleteRequest.getId()));
+    }
+
+    @AuthCheck(mustRole = "admin")
     @PostMapping("/list/page/vo")
     public BaseResponse<Page<UserVO>> listUserVOByPage(@RequestBody UserQueryRequest userQueryRequest){
         // 1.校验参数
@@ -95,7 +103,7 @@ public class UserController {
         // 将UserList转换为UserVOList
         List<UserVO> userVOList = userService.getUserVOList(recordUserList);
         // 再将UserVOList转换为UserVOPage
-        Page<UserVO> userPage = new Page<>(current, pageSize, recordUserList.size());
+        Page<UserVO> userPage = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
         userPage.setRecords(userVOList);
         // 5.返回
         return ResultUtil.success(userPage);
