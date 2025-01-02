@@ -121,7 +121,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     public User getLoginUser(HttpServletRequest request){
         // 从缓存中获取当前用户
         User currentUser = (User) request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE);;
-        ThrowUtil.throwIf(currentUser == null || currentUser.getId() == null,ResponseCode.NOT_FOUND_ERROR, "当前用户在session中不存在");
+        if (currentUser == null){
+            return null;
+        }
         // todo 追求性能可以注释
         currentUser = this.getById(currentUser.getId());
         ThrowUtil.throwIf(currentUser == null ,ResponseCode.NOT_FOUND_ERROR, "当前用户在数据库中不存在");

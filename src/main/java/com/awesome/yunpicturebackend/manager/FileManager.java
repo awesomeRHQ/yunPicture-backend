@@ -113,8 +113,8 @@ public class FileManager {
         ThrowUtil.throwIf(multipartFile == null, ResponseCode.PARAMS_ERROR,"上传的图片文件不存在");
         // 校验大小
         long pictureSize = multipartFile.getSize();
-        final long ONE_MB = 1024 * 1024L;
-        ThrowUtil.throwIf(pictureSize > ONE_MB, ResponseCode.PARAMS_ERROR, "图片大小不能超过1MB");
+        final long SIX_MB = 6 * 1024 * 1024L;
+        ThrowUtil.throwIf(pictureSize > SIX_MB, ResponseCode.PARAMS_ERROR, "图片大小不能超过6MB");
         // 校验文件后缀
         String pictureSuffixName = FileUtil.extName(multipartFile.getOriginalFilename());
         List<String> ALLOW_SUFFIX = Arrays.asList("jpg", "jpeg", "png", "gif", "webp");

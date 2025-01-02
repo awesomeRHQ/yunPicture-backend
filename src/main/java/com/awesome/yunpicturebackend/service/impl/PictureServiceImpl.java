@@ -3,11 +3,13 @@ package com.awesome.yunpicturebackend.service.impl;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.awesome.yunpicturebackend.annotation.AuthCheck;
 import com.awesome.yunpicturebackend.common.ResponseCode;
 import com.awesome.yunpicturebackend.exception.ThrowUtil;
 import com.awesome.yunpicturebackend.manager.FileManager;
 import com.awesome.yunpicturebackend.mapper.PictureMapper;
 import com.awesome.yunpicturebackend.model.dto.file.UploadPictureResult;
+import com.awesome.yunpicturebackend.model.dto.picture.PictureLoadMoreRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureQueryRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadRequest;
 import com.awesome.yunpicturebackend.model.entity.Picture;
@@ -45,6 +47,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private PictureMapper pictureMapper;
 
 
     /**
@@ -168,6 +173,40 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         return pictureVOPage;
     }
 
+    /**
+     * 分批获取脱敏图片列表（用于未登录用户）
+     * @param pictureLoadMoreRequest 查询请求对象
+     * @return 图片列表
+     */
+    @Override
+    public List<PictureVO> listPictureVOBatch(PictureLoadMoreRequest pictureLoadMoreRequest) {
+        int current = pictureLoadMoreRequest.getCurrent();
+        int pageSize = pictureLoadMoreRequest.getPageSize();
+        // 为了调用 getQueryWrapper 方法创建匹配的参数对象
+        PictureQueryRequest pictureQueryRequest = new PictureQueryRequest();
+        BeanUtils.copyProperties(pictureLoadMoreRequest, pictureQueryRequest);
+        Page<Picture> picturePage = this.page(new Page<>(current, pageSize), getQueryWrapper(pictureQueryRequest));
+        return this.getPictureVOList(picturePage.getRecords());
+    }
+
+    /**
+     * 分批获取推荐脱敏图片列表（用于登录用户）
+     * @param pictureLoadMoreRequest 查询请求对象
+     * @return 图片列表
+     */
+    @AuthCheck(mustRole = "user")
+    @Override
+    public List<PictureVO> listRecommendPictureVOBatch(PictureLoadMoreRequest pictureLoadMoreRequest) {
+        int current = pictureLoadMoreRequest.getCurrent();
+        int pageSize = pictureLoadMoreRequest.getPageSize();
+        // 为了调用 getQueryWrapper 方法创建匹配的参数对象
+        PictureQueryRequest pictureQueryRequest = new PictureQueryRequest();
+        BeanUtils.copyProperties(pictureLoadMoreRequest, pictureQueryRequest);
+        // todo 结合用户的搜索偏好返回数据
+        Page<Picture> picturePage = this.page(new Page<>(current, pageSize), getQueryWrapper(pictureQueryRequest));
+        return this.getPictureVOList(picturePage.getRecords());
+    }
+
     @Override
     public QueryWrapper<Picture> getQueryWrapper(PictureQueryRequest pictureQueryRequest) {
         Long id = pictureQueryRequest.getId();
@@ -187,7 +226,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         pictureQueryWrapper.eq(StrUtil.isNotBlank(category), "category", category);
         pictureQueryWrapper.and(StrUtil.isNotBlank(searchText),
                 q -> q.or(
-                        i -> i.like("name", searchText).like("introduction", searchText)
+                        i -> i.like("name", searchText).or().like("introduction", searchText).or().like("tags",searchText)
                 )
         );
         // JSON数组查询

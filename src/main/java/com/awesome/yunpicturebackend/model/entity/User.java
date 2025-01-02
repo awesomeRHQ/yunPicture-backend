@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import java.io.Serializable;
 import java.util.Date;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 /**
  * 用户表
@@ -12,6 +13,7 @@ import lombok.Data;
  */
 @TableName(value ="user")
 @Data
+@EqualsAndHashCode(callSuper = false)
 public class User implements Serializable {
     /**
      * id

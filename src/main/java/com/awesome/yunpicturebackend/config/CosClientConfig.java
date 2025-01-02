@@ -7,9 +7,11 @@ import com.qcloud.cos.auth.COSCredentials;
 import com.qcloud.cos.http.HttpProtocol;
 import com.qcloud.cos.region.Region;
 import lombok.Data;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
 
 @Configuration
 @ConfigurationProperties(prefix = "cos.client")
@@ -42,6 +44,7 @@ public class CosClientConfig {
     private String bucket;
 
     @Bean
+    @Scope(value = ConfigurableBeanFactory.SCOPE_PROTOTYPE)
     public COSClient cosClient() {
         // 1 初始化用户身份信息（secretId, secretKey）。
         COSCredentials cred = new BasicCOSCredentials(secretId, secretKey);

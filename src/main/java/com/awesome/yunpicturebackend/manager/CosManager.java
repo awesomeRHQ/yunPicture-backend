@@ -66,8 +66,6 @@ public class CosManager {
         }catch (Exception e) {
             log.error(e.getMessage());
             throw new BusinessException(ResponseCode.OPERATION_ERROR,"图片上传Cos服务器失败");
-        }finally {
-            cosClient.shutdown();
         }
 
     }

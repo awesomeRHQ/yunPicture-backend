@@ -1,6 +1,7 @@
 package com.awesome.yunpicturebackend.service;
 
 
+import com.awesome.yunpicturebackend.model.dto.picture.PictureLoadMoreRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureQueryRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadRequest;
 import com.awesome.yunpicturebackend.model.entity.Picture;
@@ -46,9 +47,9 @@ public interface PictureService extends IService<Picture> {
     List<Picture> getPictureList(PictureQueryRequest pictureQueryRequest);
 
     /**
-     * 获取脱敏图片列表
+     * 获取脱敏图片分页列表
      * @param pictureList 图片列表
-     * @return 图片列表
+     * @return 图片分页列表
      */
     List<PictureVO> getPictureVOList(List<Picture> pictureList);
 
@@ -58,6 +59,20 @@ public interface PictureService extends IService<Picture> {
      * @return 脱敏图片分页列表
      */
     Page<PictureVO> getPictureVOPage(Page<Picture> picturePage);
+
+    /**
+     * 分批获取脱敏图片列表（用于未登录用户）
+     * @param pictureLoadMoreRequest 查询请求对象
+     * @return 图片列表
+     */
+    List<PictureVO> listPictureVOBatch(PictureLoadMoreRequest pictureLoadMoreRequest);
+
+    /**
+     * 分批获取推荐脱敏图片列表（用于登录用户）
+     * @param pictureLoadMoreRequest 查询请求对象
+     * @return 图片列表
+     */
+    List<PictureVO> listRecommendPictureVOBatch(PictureLoadMoreRequest pictureLoadMoreRequest);
 
     /**
      * 拼接查询条件

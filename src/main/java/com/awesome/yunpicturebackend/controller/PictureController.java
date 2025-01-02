@@ -10,6 +10,7 @@ import com.awesome.yunpicturebackend.common.utils.ResultUtil;
 import com.awesome.yunpicturebackend.exception.BusinessException;
 import com.awesome.yunpicturebackend.exception.ThrowUtil;
 import com.awesome.yunpicturebackend.manager.CosManager;
+import com.awesome.yunpicturebackend.model.dto.picture.PictureLoadMoreRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureQueryRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureUpdateRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadRequest;
@@ -19,6 +20,7 @@ import com.awesome.yunpicturebackend.model.enums.UserRoleEnum;
 import com.awesome.yunpicturebackend.model.vo.picture.PictureTagCategory;
 import com.awesome.yunpicturebackend.model.vo.picture.PictureVO;
 import com.awesome.yunpicturebackend.service.PictureService;
+import com.awesome.yunpicturebackend.service.TagService;
 import com.awesome.yunpicturebackend.service.UserService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +41,9 @@ import java.util.Objects;
 @RequestMapping("/picture")
 @Slf4j
 public class PictureController {
+
+    @Resource
+    private TagService tagService;
 
     @Resource
     private PictureService pictureService;
@@ -78,7 +83,7 @@ public class PictureController {
         ThrowUtil.throwIf(loginUser == null, ResponseCode.NOT_LOGIN_ERROR);
         ThrowUtil.throwIf(pictureUpdateRequest == null , ResponseCode.PARAMS_ERROR);
         // 仅管理员和图片创建人可更新图片
-        ThrowUtil.throwIf(!UserRoleEnum.ADMIN.getValue().equals(loginUser.getUserRole()) || !Objects.equals(loginUser.getId(), pictureUpdateRequest.getUserId()),
+        ThrowUtil.throwIf(!UserRoleEnum.ADMIN.getValue().equals(loginUser.getUserRole()) || !loginUser.getId().equals(pictureUpdateRequest.getUserId()),
                 ResponseCode.NO_AUTH_ERROR,"当前用户无权限编辑该图片");
         Picture picture = new Picture();
         BeanUtil.copyProperties(pictureUpdateRequest, picture);
@@ -108,7 +113,25 @@ public class PictureController {
         return ResultUtil.success(pictureService.getPictureVOPage(picturePage));
     }
 
-    @PostMapping("/get/vo")
+    @PostMapping("/batch/vo")
+    public BaseResponse<List<PictureVO>> listPictureVOBatch(@RequestBody PictureLoadMoreRequest pictureLoadMoreRequest,HttpServletRequest request) {
+        ThrowUtil.throwIf(pictureLoadMoreRequest == null , ResponseCode.PARAMS_ERROR);
+        int pageSize = pictureLoadMoreRequest.getPageSize();
+        // 对普通用户限制一次请求获取条数
+        ThrowUtil.throwIf(pageSize > 20 , ResponseCode.PARAMS_ERROR, "请求过多");
+        User loginUser = userService.getLoginUser(request);
+        // 区分是否为已登录用户查询
+        if (loginUser == null) {
+            List<PictureVO> pictureVOS = pictureService.listPictureVOBatch(pictureLoadMoreRequest);
+            return ResultUtil.success(pictureVOS);
+        } else {
+            // 未登录用户返回热门标签图片
+            return ResultUtil.success(pictureService.listRecommendPictureVOBatch(pictureLoadMoreRequest));
+        }
+
+    }
+
+    @GetMapping("/get/vo")
     public BaseResponse<PictureVO> getPictureVOById(@RequestParam Long id) {
         ThrowUtil.throwIf(id == null , ResponseCode.PARAMS_ERROR);
         Picture picture = pictureService.getById(id);
@@ -119,9 +142,7 @@ public class PictureController {
     @GetMapping("/tag_category")
     public BaseResponse<PictureTagCategory> listPictureTagCategory() {
         PictureTagCategory pictureTagCategory = new PictureTagCategory();
-        List<String> tagList = Arrays.asList("热门", "搞笑", "生活", "高清", "艺术", "校园", "背景", "简历", "创意");
         List<String> categoryList = Arrays.asList("模板", "电商", "表情包", "素材", "海报");
-        pictureTagCategory.setTagList(tagList);
         pictureTagCategory.setCategoryList(categoryList);
         return ResultUtil.success(pictureTagCategory);
     }
