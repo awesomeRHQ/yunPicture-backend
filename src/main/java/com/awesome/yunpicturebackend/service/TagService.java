@@ -17,6 +17,22 @@ import java.util.List;
 public interface TagService extends IService<Tag> {
 
     /**
+     * 保存标签
+     * @param tag 标签
+     * @param count 需要保存的次数
+     * @return 成功保存的个数
+     */
+    int saveTags(String tag, int count);
+
+    /**
+     * 保存标签
+     * @param tagList 标签列表
+     * @param count 需要保存的次数
+     * @return 保存的个数
+     */
+    int saveTags(List<String> tagList, int count);
+
+    /**
      * 判断图片标签是否发生变化
      * @param pictureId 图片Id
      * @param newTagList 提交的图片标签列表

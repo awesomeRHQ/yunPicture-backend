@@ -78,6 +78,31 @@ public class Picture implements Serializable {
     private Long userId;
 
     /**
+     * 图片源
+     */
+    private String uploadSource;
+
+    /**
+     * 审核状态
+     */
+    private Integer reviewStatus;
+
+    /**
+     * 审核信息
+     */
+    private String reviewMessage;
+
+    /**
+     * 审核人Id
+     */
+    private Long reviewerId;
+
+    /**
+     * 审核时间
+     */
+    private Date reviewTime;
+
+    /**
      * 编辑时间
      */
     private Date editTime;

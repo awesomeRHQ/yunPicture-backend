@@ -1,19 +1,20 @@
 package com.awesome.yunpicturebackend.controller;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.awesome.yunpicturebackend.annotation.AuthCheck;
 import com.awesome.yunpicturebackend.common.BaseResponse;
 import com.awesome.yunpicturebackend.common.DeleteRequest;
 import com.awesome.yunpicturebackend.common.ResponseCode;
 import com.awesome.yunpicturebackend.common.utils.ResultUtil;
+import com.awesome.yunpicturebackend.constants.UserConstant;
 import com.awesome.yunpicturebackend.exception.BusinessException;
 import com.awesome.yunpicturebackend.exception.ThrowUtil;
 import com.awesome.yunpicturebackend.manager.CosManager;
-import com.awesome.yunpicturebackend.model.dto.picture.PictureLoadMoreRequest;
-import com.awesome.yunpicturebackend.model.dto.picture.PictureQueryRequest;
-import com.awesome.yunpicturebackend.model.dto.picture.PictureUpdateRequest;
-import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadRequest;
+import com.awesome.yunpicturebackend.model.bo.picture.PictureUploadCustomInfo;
+import com.awesome.yunpicturebackend.model.dto.picture.*;
 import com.awesome.yunpicturebackend.model.entity.Picture;
 import com.awesome.yunpicturebackend.model.entity.User;
 import com.awesome.yunpicturebackend.model.enums.UserRoleEnum;
@@ -24,6 +25,7 @@ import com.awesome.yunpicturebackend.service.TagService;
 import com.awesome.yunpicturebackend.service.UserService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.ibatis.annotations.Param;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -51,17 +53,54 @@ public class PictureController {
     @Resource
     private UserService userService;
 
+    /**
+     * 上传图片
+     */
     @AuthCheck(mustRole = "admin")
     @PostMapping("/upload")
-    public BaseResponse<PictureVO> uploadPicture(
+    public BaseResponse<PictureVO> uploadPictureByFile(
             @RequestPart MultipartFile multipartFile,
-            PictureUploadRequest pictureUploadRequest,
             HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
-        PictureVO pictureVO = pictureService.uploadPicture(multipartFile, pictureUploadRequest, loginUser);
+        PictureVO pictureVO = pictureService.uploadPicture(multipartFile, loginUser,null);
         return ResultUtil.success(pictureVO);
     }
 
+    /**
+     * 上传图片
+     */
+    @AuthCheck(mustRole = "admin")
+    @PostMapping("/upload/url")
+    public BaseResponse<PictureVO> uploadPictureByUrl(
+            @RequestParam String pictureUrl,
+            HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        PictureVO pictureVO = pictureService.uploadPicture(pictureUrl, loginUser,null);
+        return ResultUtil.success(pictureVO);
+    }
+
+    /**
+     * 管理员批量爬取导入图片
+     */
+    @PostMapping("/upload/batch")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Integer> uploadPictureByBatch(
+            @RequestBody PictureUploadByBatchRequest pictureUploadByBatchRequest,
+            HttpServletRequest request
+    ) {
+        ThrowUtil.throwIf(pictureUploadByBatchRequest == null, ResponseCode.PARAMS_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        int uploadCount = pictureService.uploadPictureByBatch(pictureUploadByBatchRequest, loginUser);
+        if (uploadCount > 0 && CollUtil.isNotEmpty(pictureUploadByBatchRequest.getTagList())) {
+            // 保存图片标签
+            tagService.saveTags(pictureUploadByBatchRequest.getTagList(),uploadCount);
+        }
+        return ResultUtil.success(uploadCount);
+    }
+
+    /**
+     * 删除图片
+     */
     @AuthCheck(mustRole = "admin")
     @PostMapping("/delete")
     public BaseResponse<Boolean> deletePicture(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
@@ -76,6 +115,9 @@ public class PictureController {
         return ResultUtil.success(pictureService.removeById(deleteRequest.getId()));
     }
 
+    /**
+     * 更新图片
+     */
     @AuthCheck(mustRole = "admin")
     @PostMapping("/update")
     public BaseResponse<Boolean> updatePicture(@RequestBody PictureUpdateRequest pictureUpdateRequest, HttpServletRequest request) {
@@ -83,14 +125,18 @@ public class PictureController {
         ThrowUtil.throwIf(loginUser == null, ResponseCode.NOT_LOGIN_ERROR);
         ThrowUtil.throwIf(pictureUpdateRequest == null , ResponseCode.PARAMS_ERROR);
         // 仅管理员和图片创建人可更新图片
-        ThrowUtil.throwIf(!UserRoleEnum.ADMIN.getValue().equals(loginUser.getUserRole()) || !loginUser.getId().equals(pictureUpdateRequest.getUserId()),
+        ThrowUtil.throwIf(!UserRoleEnum.ADMIN.getValue().equals(loginUser.getUserRole()) && !loginUser.getId().equals(pictureUpdateRequest.getUserId()),
                 ResponseCode.NO_AUTH_ERROR,"当前用户无权限编辑该图片");
         Picture picture = new Picture();
         BeanUtil.copyProperties(pictureUpdateRequest, picture);
+        pictureService.setReviewStatue(picture,1,"", loginUser.getId());
         picture.setTags(JSONUtil.toJsonStr(pictureUpdateRequest.getTags()));
         return ResultUtil.success(pictureService.updateById(picture));
     }
 
+    /**
+     *
+     */
     @AuthCheck(mustRole = "admin")
     @PostMapping("/page")
     public BaseResponse<Page<Picture>> getPicturePage(@RequestBody PictureQueryRequest pictureQueryRequest) {
@@ -109,6 +155,8 @@ public class PictureController {
         int pageSize = pictureQueryRequest.getPageSize();
         // 对普通用户限制一次请求获取条数
         ThrowUtil.throwIf(pageSize > 20 , ResponseCode.PARAMS_ERROR, "请求过多");
+        // 限定普通用户只能查看审核通过的图片
+        pictureQueryRequest.setReviewStatus(List.of(1));
         Page<Picture> picturePage = pictureService.page(new Page<>(current, pageSize), pictureService.getQueryWrapper(pictureQueryRequest));
         return ResultUtil.success(pictureService.getPictureVOPage(picturePage));
     }
@@ -128,7 +176,6 @@ public class PictureController {
             // 未登录用户返回热门标签图片
             return ResultUtil.success(pictureService.listRecommendPictureVOBatch(pictureLoadMoreRequest));
         }
-
     }
 
     @GetMapping("/get/vo")
@@ -146,6 +193,31 @@ public class PictureController {
         pictureTagCategory.setCategoryList(categoryList);
         return ResultUtil.success(pictureTagCategory);
     }
+
+    @PostMapping("/review")
+    public BaseResponse<Boolean> doReview(@RequestBody PictureReviewRequest pictureReviewRequest, HttpServletRequest request) {
+        // 获取校验信息
+        ThrowUtil.throwIf(pictureReviewRequest == null , ResponseCode.PARAMS_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        ThrowUtil.throwIf(loginUser == null, ResponseCode.NOT_LOGIN_ERROR);
+        Picture picture = pictureService.getById(pictureReviewRequest.getPictureId());
+        ThrowUtil.throwIf(picture == null, ResponseCode.NOT_FOUND_ERROR);
+        // 修改图片审核状态
+        pictureService.setReviewStatue(picture,
+                pictureReviewRequest.getReviewStatus(),
+                picture.getReviewMessage(),
+                loginUser.getId());
+        // 保存审核信息
+        Picture updatePicture = new Picture();
+        updatePicture.setId(picture.getId());
+        updatePicture.setReviewStatus(pictureReviewRequest.getReviewStatus());
+        updatePicture.setReviewMessage(pictureReviewRequest.getReviewMessage());
+        updatePicture.setReviewerId(loginUser.getId());
+        pictureService.updateById(updatePicture);
+        // 返回
+        return ResultUtil.success(true);
+    }
+
 
 
 }

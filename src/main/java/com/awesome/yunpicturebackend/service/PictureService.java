@@ -1,8 +1,10 @@
 package com.awesome.yunpicturebackend.service;
 
 
+import com.awesome.yunpicturebackend.model.bo.picture.PictureUploadCustomInfo;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureLoadMoreRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureQueryRequest;
+import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadByBatchRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadRequest;
 import com.awesome.yunpicturebackend.model.entity.Picture;
 import com.awesome.yunpicturebackend.model.entity.User;
@@ -25,12 +27,20 @@ public interface PictureService extends IService<Picture> {
 
     /**
      * 图片上传
-     * @param multipartFile 文件流
-     * @param pictureUploadRequest 图片id（鉴别添加删除）
+     * @param inputSource 图片输入源
      * @param loginUser 登录用户
+     * @param pictureUploadCustomInfo 自定义图片信息
      * @return 脱敏图片信息
      */
-    PictureVO uploadPicture(MultipartFile multipartFile, PictureUploadRequest pictureUploadRequest, User loginUser);
+    PictureVO uploadPicture(Object inputSource, User loginUser, PictureUploadCustomInfo pictureUploadCustomInfo);
+
+    /**
+     * 批量爬取并导入图片（管理员用）
+     * @param pictureUploadByBatchRequest 批量上传请求参数
+     * @param loginUser 登录用户
+     * @return 上传成功图片数量
+     */
+    Integer uploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser);
 
     /**
      * 图片信息脱敏
@@ -80,5 +90,14 @@ public interface PictureService extends IService<Picture> {
      * @return
      */
     QueryWrapper<Picture> getQueryWrapper(PictureQueryRequest pictureQueryRequest);
+
+    /**
+     * 设置图片审核信息
+     * @param picture 审核图片
+     * @param reviewStatus 审核状态
+     * @param reviewMessage 审核消息
+     * @param reviewerId 审核人Id
+     */
+    void setReviewStatue(Picture picture, Integer reviewStatus, String reviewMessage, Long reviewerId);
 
 }

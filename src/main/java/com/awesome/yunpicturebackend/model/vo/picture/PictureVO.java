@@ -88,6 +88,11 @@ public class PictureVO implements Serializable {
     private Date createTime;
 
     /**
+     * 审核状态
+     */
+    private Integer reviewStatus;
+
+    /**
      * 创建用户
      */
     private UserVO userVO;

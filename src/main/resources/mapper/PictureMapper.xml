@@ -2,6 +2,19 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.awesome.yunpicturebackend.mapper.PictureMapper">
+    
+    <select id="listPictureBatch" parameterType="com.awesome.yunpicturebackend.model.dto.picture.PictureLoadMoreRequest" resultMap="PictureMap">
+        select * from picture
+        where
+            1=1
+        <if test="searchText != null and searchText != ''">
+            and ( name like '%'#{searchText}'%' or introduction like '%'#{searchText}'%' )
+        </if>
+        order by
+            createTime desc
+        limit
+            #{queryCount} OFFSET #{queryCount} * (#{queryNum} - 1)
+    </select>
 
     <resultMap type="com.awesome.yunpicturebackend.model.entity.Picture" id="PictureMap">
         <result property="id" column="id" jdbcType="INTEGER"/>
@@ -16,6 +29,11 @@
         <result property="picScale" column="picScale" jdbcType="NUMERIC"/>
         <result property="picFormat" column="picFormat" jdbcType="VARCHAR"/>
         <result property="userId" column="userId" jdbcType="INTEGER"/>
+        <result property="uploadSource" column="uploadSource" jdbcType="VARCHAR"/>
+        <result property="reviewStatus" column="reviewStatus" jdbcType="INTEGER"/>
+        <result property="reviewMessage" column="reviewMessage" jdbcType="VARCHAR"/>
+        <result property="reviewerId" column="reviewerId" jdbcType="INTEGER"/>
+        <result property="reviewTime" column="reviewTime" jdbcType="TIMESTAMP"/>
         <result property="editTime" column="editTime" jdbcType="TIMESTAMP"/>
         <result property="createTime" column="createTime" jdbcType="TIMESTAMP"/>
         <result property="updateTime" column="updateTime" jdbcType="TIMESTAMP"/>
@@ -23,8 +41,7 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        id
-        ,
+        id,
         url,
         name,
         introduction,
@@ -36,6 +53,11 @@
         picScale,
         picFormat,
         userId,
+        uploadSource,
+        reviewStatus,
+        reviewMessage,
+        reviewerId,
+        reviewTime,
         editTime,
         createTime,
         updateTime,
