@@ -1,5 +1,6 @@
 package com.awesome.yunpicturebackend.manager;
 
+import cn.hutool.core.io.FileUtil;
 import com.awesome.yunpicturebackend.common.ResponseCode;
 import com.awesome.yunpicturebackend.config.CosClientConfig;
 import com.awesome.yunpicturebackend.exception.BusinessException;
@@ -14,6 +15,9 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 
 /**
  * 可复用的cos操作类
@@ -60,8 +64,17 @@ public class CosManager {
             PicOperations picOperations = new PicOperations();
             // 1表示返回图片信息
             picOperations.setIsPicInfo(1);
+            // 图片压缩
+            String pictureName = FileUtil.mainName(key) + ".webp";
+            List<PicOperations.Rule> ruleList = new LinkedList<>();
+            PicOperations.Rule rule = new PicOperations.Rule();
+            rule.setBucket(cosClientConfig.getBucket());
+            rule.setFileId(pictureName);
+            rule.setRule("imageMogr2/format/webp");
+            ruleList.add(rule);
             // 构造处理参数
             putObjectRequest.setPicOperations(picOperations);
+            picOperations.setRules(ruleList);
             return cosClient.putObject(putObjectRequest);
         }catch (Exception e) {
             log.error(e.getMessage());

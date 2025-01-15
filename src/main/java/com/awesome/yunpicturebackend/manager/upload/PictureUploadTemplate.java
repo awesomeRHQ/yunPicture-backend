@@ -10,13 +10,16 @@ import com.awesome.yunpicturebackend.manager.CosManager;
 import com.awesome.yunpicturebackend.model.dto.file.UploadPictureResult;
 import com.qcloud.cos.exception.CosServiceException;
 import com.qcloud.cos.model.PutObjectResult;
+import com.qcloud.cos.model.ciModel.persistence.CIObject;
 import com.qcloud.cos.model.ciModel.persistence.ImageInfo;
+import com.qcloud.cos.model.ciModel.persistence.OriginalInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
 @Slf4j
 public abstract class PictureUploadTemplate {
@@ -52,19 +55,13 @@ public abstract class PictureUploadTemplate {
             PutObjectResult putObjectResult = cosManager.putPictureObject(uploadPath, tempFile);
             // 4.封装返回的上传结果
             // Cos返回的图片信息对象
-            ImageInfo imageInfo = putObjectResult.getCiUploadResult().getOriginalInfo().getImageInfo();
-            int picWidth = imageInfo.getWidth();
-            int picHeight = imageInfo.getHeight();
-            double picScale = NumberUtil.round(picWidth * 1.0 / picHeight, 2).doubleValue();
-            UploadPictureResult uploadPictureResult = new UploadPictureResult();
-            uploadPictureResult.setUrl(cosClientConfig.getHost() + uploadPath);
-            uploadPictureResult.setName(FileUtil.mainName(originalFilename));
-            uploadPictureResult.setPicSize(FileUtil.size(tempFile));
-            uploadPictureResult.setPicWidth(picWidth);
-            uploadPictureResult.setPicHeight(picHeight);
-            uploadPictureResult.setPicScale(picScale);
-            uploadPictureResult.setPicFormat(imageInfo.getFormat());
-            return uploadPictureResult;
+            OriginalInfo originalInfo = putObjectResult.getCiUploadResult().getOriginalInfo();
+            List<CIObject> objectList = putObjectResult.getCiUploadResult().getProcessResults().getObjectList();
+            if (objectList != null && !objectList.isEmpty()) {
+                CIObject compressCiObject = objectList.get(0);
+                return buildUploadPictureResult(FileUtil.size(tempFile),originalInfo, compressCiObject);
+            }
+            return buildUploadPictureResult(FileUtil.size(tempFile),originalInfo, null);
         } catch (CosServiceException e) {
             log.error(e.getMessage());
             throw new BusinessException(ResponseCode.OPERATION_ERROR, "文件上传失败");
@@ -109,5 +106,24 @@ public abstract class PictureUploadTemplate {
                 log.error("tempFile delete error; filePath = " + tempFile.getPath());
             }
         }
+    }
+
+    private UploadPictureResult buildUploadPictureResult(Long fileSize, OriginalInfo originalInfo,CIObject CiObject){
+        ImageInfo imageInfo = originalInfo.getImageInfo();
+        int picWidth = imageInfo.getWidth();
+        int picHeight = imageInfo.getHeight();
+        double picScale = NumberUtil.round(picWidth * 1.0 / picHeight, 2).doubleValue();
+        UploadPictureResult uploadPictureResult = new UploadPictureResult();
+        uploadPictureResult.setUrl(cosClientConfig.getHost() + '/' + originalInfo.getKey());
+        if (CiObject != null){
+            uploadPictureResult.setCompressUrl(cosClientConfig.getHost() + '/' + CiObject.getKey());
+        }
+        uploadPictureResult.setName(FileUtil.mainName(originalInfo.getKey()));
+        uploadPictureResult.setPicSize(fileSize);
+        uploadPictureResult.setPicWidth(picWidth);
+        uploadPictureResult.setPicHeight(picHeight);
+        uploadPictureResult.setPicScale(picScale);
+        uploadPictureResult.setPicFormat(imageInfo.getFormat());
+        return uploadPictureResult;
     }
 }

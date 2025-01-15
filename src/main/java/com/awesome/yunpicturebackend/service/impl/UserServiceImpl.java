@@ -125,8 +125,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             return null;
         }
         // todo 追求性能可以注释
-        currentUser = this.getById(currentUser.getId());
-        ThrowUtil.throwIf(currentUser == null ,ResponseCode.NOT_FOUND_ERROR, "当前用户在数据库中不存在");
+//        currentUser = this.getById(currentUser.getId());
+//        ThrowUtil.throwIf(currentUser == null ,ResponseCode.NOT_FOUND_ERROR, "当前用户在数据库中不存在");
+//        request.setAttribute(UserConstant.USER_LOGIN_STATE,currentUser);
         return currentUser;
     }
 

@@ -19,6 +19,7 @@
     <resultMap type="com.awesome.yunpicturebackend.model.entity.Picture" id="PictureMap">
         <result property="id" column="id" jdbcType="INTEGER"/>
         <result property="url" column="url" jdbcType="VARCHAR"/>
+        <result property="compressUrl" column="compressUrl" jdbcType="VARCHAR"/>
         <result property="name" column="name" jdbcType="VARCHAR"/>
         <result property="introduction" column="introduction" jdbcType="VARCHAR"/>
         <result property="category" column="category" jdbcType="VARCHAR"/>
@@ -43,6 +44,7 @@
     <sql id="Base_Column_List">
         id,
         url,
+        compressUrlm,
         name,
         introduction,
         category,
