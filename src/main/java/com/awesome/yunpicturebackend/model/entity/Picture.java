@@ -83,6 +83,11 @@ public class Picture implements Serializable {
     private Long userId;
 
     /**
+     * 所属空间Id
+     */
+    private Long spaceId;
+
+    /**
      * 图片源
      */
     private String uploadSource;

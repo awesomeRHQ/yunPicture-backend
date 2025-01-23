@@ -7,6 +7,12 @@ import java.util.stream.Collectors;
 
 public class CollectionUtil {
 
+    /**
+     * 判断两个数组的变化
+     * @param oldList 旧数组
+     * @param newList 新数组
+     * @return 不同点
+     */
     public static AddAndDeleteResult findDifferences(List<String> oldList, List<String> newList) {
         // 将列表转换为集合
         Set<String> oldSet = new HashSet<>(oldList);

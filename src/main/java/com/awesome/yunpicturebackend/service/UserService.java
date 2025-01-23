@@ -42,6 +42,12 @@ public interface UserService extends IService<User> {
     User getLoginUser(HttpServletRequest request);
 
     /**
+     * 获取当前登录用户，不存在直接抛出异常，用于request校验
+     * @return 当前登录用户
+     */
+    User getLoginUserIfExist(HttpServletRequest request);
+
+    /**
      * 用户注销
      */
     boolean userLogout(HttpServletRequest request);

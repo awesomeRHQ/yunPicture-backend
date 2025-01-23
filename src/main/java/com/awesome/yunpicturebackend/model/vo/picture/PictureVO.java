@@ -103,6 +103,11 @@ public class PictureVO implements Serializable {
     private UserVO userVO;
 
     /**
+     * 所属空间Id
+     */
+    private Long spaceId;
+
+    /**
      * vo转实体类
      * @param pictureVO vo
      */

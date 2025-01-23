@@ -11,6 +11,7 @@ import com.awesome.yunpicturebackend.model.enums.SortOrderEnum;
 import com.awesome.yunpicturebackend.model.enums.UserRoleEnum;
 import com.awesome.yunpicturebackend.model.vo.user.LoginUserVO;
 import com.awesome.yunpicturebackend.model.vo.user.UserVO;
+import com.awesome.yunpicturebackend.service.SpaceService;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.awesome.yunpicturebackend.model.entity.User;
@@ -18,9 +19,11 @@ import com.awesome.yunpicturebackend.service.UserService;
 import com.awesome.yunpicturebackend.mapper.UserMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -34,6 +37,10 @@ import java.util.stream.Collectors;
 @Slf4j
 public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     implements UserService{
+
+    @Resource
+    @Lazy
+    private SpaceService spaceService;
 
     /**
      * 用户注册
@@ -74,12 +81,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         newUser.setUserAvatar(UserConstant.USER_DEFAULT_AVATAR);
         newUser.setUserRole(UserRoleEnum.USER.getValue());
         try {
-            boolean result = this.save(newUser);
-            if (!result){
-                throw new BusinessException(ResponseCode.SYSTEM_ERROR,"注册，数据库插入错误");
+            boolean saveResult = this.save(newUser);
+            // 5.初始化用户空间
+            if (saveResult){
+                spaceService.initPrivateSpace(newUser);
             }
         }catch (RuntimeException e){
-            throw new BusinessException(ResponseCode.SYSTEM_ERROR,"注册，数据库插入错误");
+            throw new BusinessException(ResponseCode.SYSTEM_ERROR,"用户注册，数据库插入错误");
         }
         // 5.返回
         return newUser.getId();
@@ -128,6 +136,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 //        currentUser = this.getById(currentUser.getId());
 //        ThrowUtil.throwIf(currentUser == null ,ResponseCode.NOT_FOUND_ERROR, "当前用户在数据库中不存在");
 //        request.setAttribute(UserConstant.USER_LOGIN_STATE,currentUser);
+        return currentUser;
+    }
+
+    /**
+     * 获取当前登录用户，不存在直接抛出异常，用于request校验
+     * @return 当前登录用户
+     */
+    @Override
+    public User getLoginUserIfExist(HttpServletRequest request) {
+        // 从缓存中获取当前用户
+        User currentUser = (User) request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE);;
+        ThrowUtil.throwIf(currentUser == null, ResponseCode.OPERATION_ERROR,"登录用户不存在");
         return currentUser;
     }
 

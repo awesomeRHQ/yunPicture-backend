@@ -30,6 +30,7 @@
         <result property="picScale" column="picScale" jdbcType="NUMERIC"/>
         <result property="picFormat" column="picFormat" jdbcType="VARCHAR"/>
         <result property="userId" column="userId" jdbcType="INTEGER"/>
+        <result property="spaceId" column="spaceId" jdbcType="INTEGER"/>
         <result property="uploadSource" column="uploadSource" jdbcType="VARCHAR"/>
         <result property="reviewStatus" column="reviewStatus" jdbcType="INTEGER"/>
         <result property="reviewMessage" column="reviewMessage" jdbcType="VARCHAR"/>
@@ -55,6 +56,7 @@
         picScale,
         picFormat,
         userId,
+        spaceId,
         uploadSource,
         reviewStatus,
         reviewMessage,

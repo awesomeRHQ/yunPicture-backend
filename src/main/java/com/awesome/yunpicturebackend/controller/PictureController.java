@@ -2,7 +2,6 @@ package com.awesome.yunpicturebackend.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.awesome.yunpicturebackend.annotation.AuthCheck;
 import com.awesome.yunpicturebackend.common.BaseResponse;
@@ -12,8 +11,6 @@ import com.awesome.yunpicturebackend.common.utils.ResultUtil;
 import com.awesome.yunpicturebackend.constants.UserConstant;
 import com.awesome.yunpicturebackend.exception.BusinessException;
 import com.awesome.yunpicturebackend.exception.ThrowUtil;
-import com.awesome.yunpicturebackend.manager.CosManager;
-import com.awesome.yunpicturebackend.model.bo.picture.PictureUploadCustomInfo;
 import com.awesome.yunpicturebackend.model.dto.picture.*;
 import com.awesome.yunpicturebackend.model.entity.Picture;
 import com.awesome.yunpicturebackend.model.entity.User;
@@ -25,19 +22,13 @@ import com.awesome.yunpicturebackend.service.TagService;
 import com.awesome.yunpicturebackend.service.UserService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.ibatis.annotations.Param;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.CopyOption;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 
 @RestController
 @RequestMapping("/picture")
@@ -56,26 +47,26 @@ public class PictureController {
     /**
      * 上传图片
      */
-    @AuthCheck(mustRole = "admin")
     @PostMapping("/upload")
     public BaseResponse<PictureVO> uploadPictureByFile(
             @RequestPart MultipartFile multipartFile,
+            PictureUploadRequest pictureUploadRequest,
             HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
-        PictureVO pictureVO = pictureService.uploadPicture(multipartFile, loginUser,null);
+        PictureVO pictureVO = pictureService.uploadPicture(multipartFile, loginUser,pictureUploadRequest);
         return ResultUtil.success(pictureVO);
     }
 
     /**
      * 上传图片
      */
-    @AuthCheck(mustRole = "admin")
     @PostMapping("/upload/url")
     public BaseResponse<PictureVO> uploadPictureByUrl(
             @RequestParam String pictureUrl,
+            PictureUploadRequest pictureUploadRequest,
             HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
-        PictureVO pictureVO = pictureService.uploadPicture(pictureUrl, loginUser,null);
+        PictureVO pictureVO = pictureService.uploadPicture(pictureUrl, loginUser,pictureUploadRequest);
         return ResultUtil.success(pictureVO);
     }
 
@@ -99,9 +90,8 @@ public class PictureController {
     }
 
     /**
-     * 删除图片
+     * 删除单张图片
      */
-    @AuthCheck(mustRole = "admin")
     @PostMapping("/delete")
     public BaseResponse<Boolean> deletePicture(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
@@ -110,15 +100,37 @@ public class PictureController {
         Picture existPicture = pictureService.getById(deleteRequest.getId());
         ThrowUtil.throwIf(existPicture == null, ResponseCode.PARAMS_ERROR, "图片不存在");
         // 仅管理员和图片创建人可删除
-        ThrowUtil.throwIf(!UserRoleEnum.ADMIN.getValue().equals(loginUser.getUserRole()) || !Objects.equals(loginUser.getId(), existPicture.getUserId()),
-                ResponseCode.NO_AUTH_ERROR,"当前用户无权限删除该图片");
-        return ResultUtil.success(pictureService.removeById(deleteRequest.getId()));
+        if (!UserRoleEnum.ADMIN.getValue().equals(loginUser.getUserRole()) && !loginUser.getId().equals(existPicture.getUserId())){
+            throw new BusinessException(ResponseCode.NO_AUTH_ERROR,"当前用户无权限删除该图片");
+        }
+        boolean res = pictureService.deletePicture(existPicture, true);
+        return ResultUtil.success(res);
+    }
+
+    /**
+     * 批量删除图片
+     */
+    @PostMapping("/delete/pictures")
+    public BaseResponse<Boolean> deletePictures(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        ThrowUtil.throwIf(loginUser == null, ResponseCode.NOT_LOGIN_ERROR);
+        ThrowUtil.throwIf(deleteRequest == null , ResponseCode.PARAMS_ERROR);
+        // todo 批量图片鉴别创建人
+        // 仅管理员和图片创建人可删除
+//        if (!UserRoleEnum.ADMIN.getValue().equals(loginUser.getUserRole()) || !loginUser.getId().equals(existPicture.getUserId())){
+//            throw new BusinessException(ResponseCode.NO_AUTH_ERROR,"当前用户无权限删除该图片");
+//        }
+        List<Long> ids = deleteRequest.getIds();
+        if (ids.isEmpty()){
+            return ResultUtil.success(true);
+        }
+        boolean res = pictureService.deletePictureByIds(ids, true);
+        return ResultUtil.success(res);
     }
 
     /**
      * 更新图片
      */
-    @AuthCheck(mustRole = "admin")
     @PostMapping("/update")
     public BaseResponse<Boolean> updatePicture(@RequestBody PictureUpdateRequest pictureUpdateRequest, HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
@@ -139,7 +151,7 @@ public class PictureController {
      */
     @AuthCheck(mustRole = "admin")
     @PostMapping("/page")
-    public BaseResponse<Page<Picture>> getPicturePage(@RequestBody PictureQueryRequest pictureQueryRequest) {
+    public BaseResponse<Page<Picture>> pagePicture(@RequestBody PictureQueryRequest pictureQueryRequest) {
         ThrowUtil.throwIf(pictureQueryRequest == null , ResponseCode.PARAMS_ERROR);
         int current = pictureQueryRequest.getCurrent();
         int pageSize = pictureQueryRequest.getPageSize();
@@ -149,7 +161,7 @@ public class PictureController {
     }
 
     @PostMapping("/page/vo")
-    public BaseResponse<Page<PictureVO>> getPictureVOPage(@RequestBody PictureQueryRequest pictureQueryRequest) {
+    public BaseResponse<Page<PictureVO>> pagePictureVO(@RequestBody PictureQueryRequest pictureQueryRequest) {
         ThrowUtil.throwIf(pictureQueryRequest == null , ResponseCode.PARAMS_ERROR);
         int current = pictureQueryRequest.getCurrent();
         int pageSize = pictureQueryRequest.getPageSize();

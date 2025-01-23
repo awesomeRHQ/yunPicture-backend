@@ -1,10 +1,10 @@
 package com.awesome.yunpicturebackend.model.bo.picture;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.util.List;
 
+@Deprecated
 @Data
 public class PictureUploadCustomInfo {
 

@@ -6,34 +6,46 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.awesome.yunpicturebackend.annotation.AuthCheck;
 import com.awesome.yunpicturebackend.common.ResponseCode;
+import com.awesome.yunpicturebackend.config.CosClientConfig;
 import com.awesome.yunpicturebackend.exception.BusinessException;
 import com.awesome.yunpicturebackend.exception.ThrowUtil;
 import com.awesome.yunpicturebackend.manager.upload.PictureFileUpload;
 import com.awesome.yunpicturebackend.manager.upload.PictureUrlUpload;
 import com.awesome.yunpicturebackend.mapper.PictureMapper;
-import com.awesome.yunpicturebackend.model.bo.picture.PictureUploadCustomInfo;
 import com.awesome.yunpicturebackend.model.dto.file.UploadPictureResult;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureLoadMoreRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureQueryRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadByBatchRequest;
+import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadRequest;
 import com.awesome.yunpicturebackend.model.entity.Picture;
+import com.awesome.yunpicturebackend.model.entity.Space;
 import com.awesome.yunpicturebackend.model.entity.User;
 import com.awesome.yunpicturebackend.model.enums.SortOrderEnum;
 import com.awesome.yunpicturebackend.model.enums.UserRoleEnum;
 import com.awesome.yunpicturebackend.model.vo.picture.PictureVO;
 import com.awesome.yunpicturebackend.service.PictureService;
-import com.awesome.yunpicturebackend.service.TagService;
+import com.awesome.yunpicturebackend.service.SpaceService;
 import com.awesome.yunpicturebackend.service.UserService;
+import com.awesome.yunpicturebackend.util.StringUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.qcloud.cos.COSClient;
+import com.qcloud.cos.exception.CosClientException;
+import com.qcloud.cos.exception.CosServiceException;
+import com.qcloud.cos.exception.MultiObjectDeleteException;
+import com.qcloud.cos.model.DeleteObjectsRequest;
+import com.qcloud.cos.model.DeleteObjectsResult;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.BeanUtils;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
@@ -61,19 +73,39 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
     @Resource
     private PictureUrlUpload pictureUrlUpload;
 
+    @Resource
+    private COSClient cosClient;
+
+    @Resource
+    private CosClientConfig cosClientConfig;
+
+    // todo 为什么需要解决循环依赖？
+    @Resource
+    private SpaceService spaceService;
+
+    @Resource
+    private TransactionTemplate transactionTemplate;
+
     /**
      * 图片上传
      *
-     * @param inputSource          文件源
-     * @param loginUser            登录用户
-     * @param pictureUploadCustomInfo            自定义图片信息
+     * @param inputSource             文件源
+     * @param loginUser               登录用户
+     * @param pictureUploadRequest 自定义图片信息
      * @return 脱敏图片信息
      */
     @Override
-    public PictureVO uploadPicture(Object inputSource, User loginUser, PictureUploadCustomInfo pictureUploadCustomInfo) {
+    public PictureVO uploadPicture(Object inputSource, User loginUser, PictureUploadRequest pictureUploadRequest) {
         // 1.数据校验
         ThrowUtil.throwIf(inputSource == null, ResponseCode.NOT_LOGIN_ERROR, "图片不存在，上传错误");
         ThrowUtil.throwIf(loginUser == null, ResponseCode.NOT_LOGIN_ERROR, "用户未登录，图片上传错误");
+        // 校验空间限额
+        Long spaceId = pictureUploadRequest.getSpaceId();
+        if (spaceId != null || spaceId > 0L) {
+            spaceService.checkSpaceQuota(spaceId);
+        } else {
+            spaceId = 0L;
+        }
         // 2.图片上传
         // 2.1指定用户上传文件
         String publicPathPrefix = "/public";
@@ -92,7 +124,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         ThrowUtil.throwIf(uploadPictureResult == null, ResponseCode.SYSTEM_ERROR);
         // 3.处理结果
         Picture picture = new Picture();
+        picture.setName(uploadPictureResult.getName());
         picture.setUserId(loginUser.getId());
+        picture.setSpaceId(spaceId);
         picture.setUrl(uploadPictureResult.getUrl());
         picture.setCompressUrl(uploadPictureResult.getCompressUrl());
         picture.setPicSize(uploadPictureResult.getPicSize());
@@ -102,10 +136,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         picture.setPicFormat(uploadPictureResult.getPicFormat());
         picture.setUploadSource(uploadSource.toString());
         // 存在自定义图片信息，则选择自定义信息
-        if (pictureUploadCustomInfo != null) {
-            String pictureName = pictureUploadCustomInfo.getPictureName();
-            String category = pictureUploadCustomInfo.getCategory();
-            List<String> tagList = pictureUploadCustomInfo.getTagList();
+        if (pictureUploadRequest != null) {
+            String pictureName = pictureUploadRequest.getPictureName();
+            String category = pictureUploadRequest.getCategory();
+            List<String> tagList = pictureUploadRequest.getTagList();
             if (StrUtil.isNotBlank(pictureName)) {
                 picture.setName(pictureName);
             }
@@ -115,8 +149,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             if (CollUtil.isNotEmpty(tagList)) {
                 picture.setTags(JSONUtil.toJsonStr(tagList));
             }
-        }
-        else{
+        } else {
             picture.setName(uploadPictureResult.getName());
         }
         // 设置审核状态
@@ -128,15 +161,31 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             // 否则走审核
             this.setReviewStatue(picture, 0, "", 0L);
         }
-        boolean res = this.saveOrUpdate(picture);
-        ThrowUtil.throwIf(!res, ResponseCode.SYSTEM_ERROR, "图片保存数据库错误");
+        // 使用事务
+        Long finalSpaceId = spaceId;
+        transactionTemplate.execute( status -> {
+            // 保存图片
+            boolean pictureSaveResult = this.save(picture);
+            ThrowUtil.throwIf(!pictureSaveResult, ResponseCode.OPERATION_ERROR, "图片保存失败");
+            // 更新空间
+            if (finalSpaceId > 0L) {
+                boolean spaceUpdateResult = spaceService.lambdaUpdate()
+                        .eq(Space::getId, finalSpaceId)
+                        .setSql("totalSize = totalSize + " + picture.getPicSize())
+                        .setSql("totalCount = totalCount + 1")
+                        .update();
+                ThrowUtil.throwIf(!spaceUpdateResult, ResponseCode.OPERATION_ERROR,"空间额度更新失败");
+            }
+            return picture;
+        });
         return this.getPictureVO(picture);
     }
 
     /**
      * 批量爬取并导入图片（管理员用）
+     *
      * @param pictureUploadByBatchRequest 批量上传请求参数
-     * @param loginUser 登录用户
+     * @param loginUser                   登录用户
      * @return 上传成功图片数量
      */
     @Override
@@ -178,21 +227,21 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
                 String pictureName = pictureUploadByBatchRequest.getPictureName();
                 String category = pictureUploadByBatchRequest.getCategory();
                 List<String> tagList = pictureUploadByBatchRequest.getTagList();
-                PictureUploadCustomInfo pictureUploadCustomInfo = new PictureUploadCustomInfo();
-                if (StrUtil.isNotBlank(pictureName)){
-                    pictureUploadCustomInfo.setPictureName(pictureName + (uploadCount+1));
+                PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
+                if (StrUtil.isNotBlank(pictureName)) {
+                    pictureUploadRequest.setPictureName(pictureName + (uploadCount + 1));
                 } else {
-                    pictureUploadCustomInfo.setPictureName(searchText + (uploadCount+1));
+                    pictureUploadRequest.setPictureName(searchText + (uploadCount + 1));
                 }
-                if (StrUtil.isNotBlank(category)){
-                    pictureUploadCustomInfo.setCategory(category);
+                if (StrUtil.isNotBlank(category)) {
+                    pictureUploadRequest.setCategory(category);
                 }
-                if (CollUtil.isNotEmpty(tagList)){
-                    pictureUploadCustomInfo.setTagList(tagList);
+                if (CollUtil.isNotEmpty(tagList)) {
+                    pictureUploadRequest.setTagList(tagList);
                 }
                 //endregion
                 // 上传
-                PictureVO pictureVO = this.uploadPicture(fileUrl, loginUser, pictureUploadCustomInfo);
+                PictureVO pictureVO = this.uploadPicture(fileUrl, loginUser, pictureUploadRequest);
                 log.info("图片上传成功, id = {}", pictureVO.getId());
                 uploadCount++;
             } catch (Exception e) {
@@ -207,9 +256,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
     }
 
     // todo 进入详细页面获取质量高的图片
-    public String getImgUrl(String linkUrl){
+    public String getImgUrl(String linkUrl) {
         // 要抓取的地址
-        String fetchUrl = String.format("https://www.bing.com%s",linkUrl);
+        String fetchUrl = String.format("https://www.bing.com%s", linkUrl);
         Document document;
         try {
             document = Jsoup.connect(fetchUrl).get();
@@ -356,6 +405,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         String searchText = pictureQueryRequest.getSearchText();
         List<Integer> reviewStatus = pictureQueryRequest.getReviewStatus();
         Long userId = pictureQueryRequest.getUserId();
+        Long spaceId = pictureQueryRequest.getSpaceId();
         String sortField = pictureQueryRequest.getSortField();
         String sortOrder = pictureQueryRequest.getSortOrder();
 
@@ -384,6 +434,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             });
         }
         pictureQueryWrapper.eq(userId != null && userId > 0, "userId", userId);
+        // 若未指定空间，则默认查看公开图片
+        if (spaceId == null || spaceId <= 0){
+            pictureQueryWrapper.eq("spaceId", 0);
+        } else {
+            pictureQueryWrapper.eq("spaceId", spaceId);
+        }
+
         pictureQueryWrapper.orderBy(StrUtil.isNotBlank(sortField), SortOrderEnum.ASC.getValue().equals(sortOrder), sortField);
         return pictureQueryWrapper;
     }
@@ -412,10 +469,15 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             picture.setReviewMessage("管理员审核自动通过");
             picture.setReviewerId(reviewerId);
         } else {
-            // 原本存在审核信息,则表示更新图片，重新设置审核信息
-            if (picture.getReviewStatus() > 0) {
-                picture.setReviewMessage("");
+            // 更新图片
+            if (picture.getReviewStatus() != null && picture.getReviewStatus() > 0){
+                // 原本存在审核信息,则表示更新图片，重新设置审核信息
+                    picture.setReviewMessage("");
+            }else {
+                // 新增图片
+                picture.setReviewStatus(0);
             }
+            // 根据传参填写
             if (reviewStatus != null || reviewStatus > 0) {
                 picture.setReviewStatus(reviewStatus);
             }
@@ -425,6 +487,199 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             if (reviewerId != null && reviewerId > 0) {
                 picture.setReviewerId(reviewerId);
             }
+        }
+    }
+
+    /**
+     * 删除图片对象
+     *
+     * @param pictureObject   图片（Id或者对象）
+     * @param deleteCosObject 是否同时删除对象存储内容
+     */
+    @Override
+    @Transactional(rollbackFor = {Exception.class, CosServiceException.class, CosClientException.class})
+    public boolean deletePicture(Object pictureObject, boolean deleteCosObject) {
+        // 1.校验参数
+        if (pictureObject == null) {
+            log.info("pictureObject 参数错误");
+            return false;
+        }
+        // 2.辨别参数类型，并且获取操作的图片对象
+        Picture picture = null;
+        if (pictureObject instanceof Picture) {
+            picture = (Picture) pictureObject;
+        } else if (pictureObject instanceof Long) {
+            picture = getById((Long) pictureObject);
+            if (picture == null) {
+                log.info("图片Id：" + pictureObject + "，不存在");
+                return false;
+            }
+        } else {
+            log.info("图片数据 pictureObject 错误：");
+            return false;
+        }
+        // 3.删除数据
+        try {
+            // 删除数据库数据
+            this.removeById(picture.getId());
+            // 删除对象存储数据
+            if (deleteCosObject) {
+                // 原图url
+                String originUrl = picture.getUrl();
+                if (StrUtil.isNotBlank(originUrl)) {
+                    String pictureUrlKey = StringUtil.getTruncatedString(originUrl, cosClientConfig.getHost() + "/");
+                    cosClient.deleteObject(cosClientConfig.getBucket(), pictureUrlKey);
+                }
+                // 压缩图url
+                String compressUrl = picture.getCompressUrl();
+                if (StrUtil.isNotBlank(compressUrl)) {
+                    String pictureCompressUrlKey = StringUtil.getTruncatedString(compressUrl, cosClientConfig.getHost() + "/");
+                    cosClient.deleteObject(cosClientConfig.getBucket(), pictureCompressUrlKey);
+                }
+            }
+            // 更新空间限额
+            // 更新空间
+            Long pictureSpaceId = picture.getSpaceId();
+            if (pictureSpaceId > 0L) {
+                // todo 当前限额数值为0时需要判断吗？
+                boolean spaceUpdateResult = spaceService.lambdaUpdate()
+                        .eq(Space::getId, pictureSpaceId)
+                        .setSql("totalSize = totalSize - " + picture.getPicSize())
+                        .setSql("totalCount = totalCount - 1")
+                        .update();
+                ThrowUtil.throwIf(!spaceUpdateResult, ResponseCode.OPERATION_ERROR,"空间额度更新失败");
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 批量删除图片
+     * @param pictureIdList 图片Id集合
+     * @param deleteCosObject 是否同时删除对象存储内容
+     * @return
+     */
+    @Override
+    @Transactional(rollbackFor = CosClientException.class)
+    public boolean deletePictureByIds(List<Long> pictureIdList, boolean deleteCosObject) {
+        // 1.校验参数
+        if (pictureIdList == null || pictureIdList.isEmpty()) {
+            log.info("图片Id列表为空");
+            return false;
+        }
+        // 2.删除数据
+        try {
+            // 获取图片列表
+            List<Picture> pictureList = this.listByIds(pictureIdList);
+            if (CollUtil.isEmpty(pictureList)) {
+                log.info("查询的图片列表为空");
+                return false;
+            }
+            // 删除数据库
+            this.removeByIds(pictureIdList);
+            // 删除对象存储
+            if (deleteCosObject) {
+                try {
+                    deleteCosPictures(pictureList);
+                } catch (CosClientException cce) {
+                    throw cce;
+                }
+            }
+        } catch (RuntimeException e) {
+            throw e;
+        }
+        return true;
+    }
+
+    @Override
+    @Transactional(rollbackFor = CosClientException.class)
+    public boolean deletePictureByPictureList(List<Picture> pictureList, boolean deleteCosObject) {
+        // 1.校验参数
+        if (pictureList == null || pictureList.isEmpty()) {
+            log.info("图片列表为空");
+            return false;
+        }
+        // 2.删除数据
+        try {
+            // 删除数据库
+            this.removeByIds(pictureList);
+            // 删除对象存储
+            if (deleteCosObject) {
+                try {
+                    deleteCosPictures(pictureList);
+                } catch (CosClientException cce) {
+                    throw cce;
+                }
+            }
+        } catch (RuntimeException e) {
+            throw e;
+        }
+        return true;
+    }
+
+    /**
+     * 批量删除对象存储中的图片
+     *
+     * @param pictureList 图片列表
+     */
+    @Override
+    @Async
+    public void deleteCosPictures(List<Picture> pictureList) {
+        // 删除对象存储数据
+        DeleteObjectsRequest deleteObjectsRequest = new DeleteObjectsRequest(cosClientConfig.getBucket());
+        // 设置要删除的key列表, 最多一次删除1000个
+        // 原图keys
+        ArrayList<DeleteObjectsRequest.KeyVersion> sourceKeyList = new ArrayList<>();
+        // 压缩图keys
+        ArrayList<DeleteObjectsRequest.KeyVersion> compressKeyList = new ArrayList<>();
+        // 遍历图片列表获取Cos key
+        pictureList.forEach(picture -> {
+            // 获取原图url
+            if (StrUtil.isNotBlank(picture.getUrl())) {
+                sourceKeyList.add(
+                        new DeleteObjectsRequest.KeyVersion(
+                                StringUtil.getTruncatedString(picture.getUrl(), cosClientConfig.getHost() + "/")
+                        )
+                );
+            }
+            // 获取压缩图url
+            if (StrUtil.isNotBlank(picture.getCompressUrl())) {
+                compressKeyList.add(
+                        new DeleteObjectsRequest.KeyVersion(
+                                StringUtil.getTruncatedString(picture.getCompressUrl(), cosClientConfig.getHost() + "/")
+                        )
+                );
+            }
+        });
+        try {
+            // 删除原图
+            try {
+                deleteObjectsRequest.setKeys(sourceKeyList);
+                DeleteObjectsResult deleteSourceResult = cosClient.deleteObjects(deleteObjectsRequest);
+            } catch (MultiObjectDeleteException mde) {
+                // 如果部分删除成功部分失败, 返回 MultiObjectDeleteException
+                List<MultiObjectDeleteException.DeleteError> deleteErrors = mde.getErrors();
+                log.info("原图部分删除失败：" + deleteErrors);
+                throw mde;
+            }
+            // 删除压缩图
+            try {
+                deleteObjectsRequest.setKeys(compressKeyList);
+                DeleteObjectsResult deleteCompressResult = cosClient.deleteObjects(deleteObjectsRequest);
+            } catch (MultiObjectDeleteException mde) {
+                // 如果部分删除成功部分失败, 返回 MultiObjectDeleteException
+                List<MultiObjectDeleteException.DeleteError> deleteErrors = mde.getErrors();
+                log.info("压缩图部分删除失败：" + deleteErrors);
+                throw mde;
+            }
+        } catch (CosServiceException e) {
+            log.error("CosServiceException:" + e.getMessage());
+            throw e;
+        } catch (CosClientException e) {
+            log.error("CosClientException:" + e.getMessage());
+            throw e;
         }
     }
 

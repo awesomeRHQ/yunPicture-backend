@@ -1,7 +1,6 @@
 package com.awesome.yunpicturebackend.service;
 
 
-import com.awesome.yunpicturebackend.model.bo.picture.PictureUploadCustomInfo;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureLoadMoreRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureQueryRequest;
 import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadByBatchRequest;
@@ -12,9 +11,6 @@ import com.awesome.yunpicturebackend.model.vo.picture.PictureVO;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import org.springframework.web.multipart.MultipartFile;
-
-import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
 /**
@@ -29,10 +25,10 @@ public interface PictureService extends IService<Picture> {
      * 图片上传
      * @param inputSource 图片输入源
      * @param loginUser 登录用户
-     * @param pictureUploadCustomInfo 自定义图片信息
+     * @param pictureUploadRequest 图片信息
      * @return 脱敏图片信息
      */
-    PictureVO uploadPicture(Object inputSource, User loginUser, PictureUploadCustomInfo pictureUploadCustomInfo);
+    PictureVO uploadPicture(Object inputSource, User loginUser, PictureUploadRequest pictureUploadRequest);
 
     /**
      * 批量爬取并导入图片（管理员用）
@@ -100,4 +96,30 @@ public interface PictureService extends IService<Picture> {
      */
     void setReviewStatue(Picture picture, Integer reviewStatus, String reviewMessage, Long reviewerId);
 
+    /**
+     * 删除图片对象
+     * @param pictureObject 图片（Id或者对象）
+     * @param deleteCosObject 是否同时删除对象存储内容
+     */
+    boolean deletePicture(Object pictureObject,boolean deleteCosObject);
+
+    /**
+     * 批量删除图片对象
+     * @param pictureIdList 图片Id集合
+     * @param deleteCosObject 是否同时删除对象存储内容
+     */
+    boolean deletePictureByIds(List<Long> pictureIdList,boolean deleteCosObject);
+
+    /**
+     * 批量删除图片对象
+     * @param pictureList 图片集合
+     * @param deleteCosObject 是否同时删除对象存储内容
+     */
+    boolean deletePictureByPictureList(List<Picture> pictureList,boolean deleteCosObject);
+
+    /**
+     * 批量删除对象存储中的图片
+     * @param pictureList 图片列表
+     */
+    void deleteCosPictures(List<Picture> pictureList);
 }

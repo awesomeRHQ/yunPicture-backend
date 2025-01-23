@@ -3,14 +3,18 @@ package com.awesome.yunpicturebackend.model.dto.picture;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.List;
 
 @Data
 public class PictureUploadRequest implements Serializable {
 
-    /**
-     * 图片 id（用于修改）
-     */
-    private Long id;
+    private String pictureName;
+
+    private String category;
+
+    private List<String> tagList;
+
+    private Long spaceId;
 
     private static final long serialVersionUID = 1L;
 }

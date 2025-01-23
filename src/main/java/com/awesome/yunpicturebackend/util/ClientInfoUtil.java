@@ -4,8 +4,16 @@ import javax.servlet.http.HttpServletRequest;
 
 import static com.awesome.yunpicturebackend.model.enums.BrowserEnum.*;
 
+/**
+ * 客户端信息工具
+ */
 public class ClientInfoUtil {
 
+    /**
+     * 获取请求点ip地址
+     * @param request 请求
+     * @return 客户端ip
+     */
     public static String getIpAddress(HttpServletRequest request) {
         String ip = request.getHeader("X-Forwarded-For"); // 可能包含多个 IP 地址
         if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
@@ -24,6 +32,11 @@ public class ClientInfoUtil {
         return ip;
     }
 
+    /**
+     * 获取客户端请求的浏览器信息
+     * @param userAgent 请求的agent信息
+     * @return 浏览器名称
+     */
     public static String getBrowserByUserAgent(String userAgent){
         if (userAgent == null) {
             return "Unknown";
