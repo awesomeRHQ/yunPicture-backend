@@ -41,8 +41,11 @@ public abstract class PictureUploadTemplate {
         validPicture(inputSource);
         // 2.自定义图片名称和上传地址
         String uuid = RandomUtil.randomString(8);
+        // 源文件名
         String originalFilename = getOriginalFilename(inputSource);
+        // 定义新文件名
         String uploadFileName = String.format("%s_%s.%s", System.currentTimeMillis(), uuid, FileUtil.extName(originalFilename));
+        // 定义保存路径
         String uploadPath = String.format("%s/%s", uploadPathPrefix, uploadFileName);
         // 3.上传文件
         // 3.1 创建一个临时文件
@@ -108,6 +111,13 @@ public abstract class PictureUploadTemplate {
         }
     }
 
+    /**
+     * 构造上传结果对象
+     * @param fileSize 文件大小
+     * @param originalInfo 文件源信息
+     * @param CiObject 上传处理后对象
+     * @return 图片处理结果信息
+     */
     private UploadPictureResult buildUploadPictureResult(Long fileSize, OriginalInfo originalInfo,CIObject CiObject){
         ImageInfo imageInfo = originalInfo.getImageInfo();
         int picWidth = imageInfo.getWidth();
@@ -124,6 +134,8 @@ public abstract class PictureUploadTemplate {
         uploadPictureResult.setPicHeight(picHeight);
         uploadPictureResult.setPicScale(picScale);
         uploadPictureResult.setPicFormat(imageInfo.getFormat());
+        uploadPictureResult.setPicColor(imageInfo.getAve());
+
         return uploadPictureResult;
     }
 }

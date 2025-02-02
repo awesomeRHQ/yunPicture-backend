@@ -2,6 +2,7 @@ package com.awesome.yunpicturebackend.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.awesome.yunpicturebackend.annotation.AuthCheck;
 import com.awesome.yunpicturebackend.common.BaseResponse;
@@ -20,6 +21,8 @@ import com.awesome.yunpicturebackend.model.vo.picture.PictureVO;
 import com.awesome.yunpicturebackend.service.PictureService;
 import com.awesome.yunpicturebackend.service.TagService;
 import com.awesome.yunpicturebackend.service.UserService;
+import com.awesome.yunpicturebackend.util.ColorSimilarityUtil;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +32,7 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/picture")
@@ -129,8 +133,9 @@ public class PictureController {
     }
 
     /**
-     * 更新图片
+     * 更新图片（管理员）
      */
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @PostMapping("/update")
     public BaseResponse<Boolean> updatePicture(@RequestBody PictureUpdateRequest pictureUpdateRequest, HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
@@ -141,8 +146,28 @@ public class PictureController {
                 ResponseCode.NO_AUTH_ERROR,"当前用户无权限编辑该图片");
         Picture picture = new Picture();
         BeanUtil.copyProperties(pictureUpdateRequest, picture);
-        pictureService.setReviewStatue(picture,1,"", loginUser.getId());
+        // 管理员或审核员更新默认通过
+        pictureService.setReviewStatue(picture,1,"管理员更新默认通过", loginUser.getId());
         picture.setTags(JSONUtil.toJsonStr(pictureUpdateRequest.getTags()));
+        return ResultUtil.success(pictureService.updateById(picture));
+    }
+
+    /**
+     * 更新图片（普通用户）
+     */
+    @PostMapping("/edit")
+    public BaseResponse<Boolean> updatePicture(@RequestBody PictureEditRequest pictureEditRequest, HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        ThrowUtil.throwIf(loginUser == null, ResponseCode.NOT_LOGIN_ERROR);
+        ThrowUtil.throwIf(pictureEditRequest == null , ResponseCode.PARAMS_ERROR);
+        // 仅创建人可更新图片
+        ThrowUtil.throwIf(!pictureEditRequest.getUserId().equals(loginUser.getId()),
+                ResponseCode.NO_AUTH_ERROR,"当前用户无权限编辑该图片");
+        Picture picture = new Picture();
+        BeanUtil.copyProperties(pictureEditRequest, picture);
+        // 修改后重新审批
+        pictureService.setReviewStatue(picture,0,"", 0L);
+        picture.setTags(JSONUtil.toJsonStr(pictureEditRequest.getTags()));
         return ResultUtil.success(pictureService.updateById(picture));
     }
 
@@ -151,42 +176,60 @@ public class PictureController {
      */
     @AuthCheck(mustRole = "admin")
     @PostMapping("/page")
-    public BaseResponse<Page<Picture>> pagePicture(@RequestBody PictureQueryRequest pictureQueryRequest) {
-        ThrowUtil.throwIf(pictureQueryRequest == null , ResponseCode.PARAMS_ERROR);
-        int current = pictureQueryRequest.getCurrent();
-        int pageSize = pictureQueryRequest.getPageSize();
+    public BaseResponse<Page<Picture>> pagePicture(@RequestBody PictureAdminQueryRequest pictureAdminQueryRequest) {
+        ThrowUtil.throwIf(pictureAdminQueryRequest == null , ResponseCode.PARAMS_ERROR);
+        int current = pictureAdminQueryRequest.getCurrent();
+        int pageSize = pictureAdminQueryRequest.getPageSize();
         Page<Picture> page = new Page<>(current, pageSize);
-        Page<Picture> picturePage = pictureService.page(page, pictureService.getQueryWrapper(pictureQueryRequest));
+        Page<Picture> picturePage = pictureService.page(page, pictureService.getQueryWrapper(pictureAdminQueryRequest));
         return ResultUtil.success(picturePage);
     }
 
+    /**
+     * 获取图片分页数据
+     */
     @PostMapping("/page/vo")
     public BaseResponse<Page<PictureVO>> pagePictureVO(@RequestBody PictureQueryRequest pictureQueryRequest) {
         ThrowUtil.throwIf(pictureQueryRequest == null , ResponseCode.PARAMS_ERROR);
         int current = pictureQueryRequest.getCurrent();
         int pageSize = pictureQueryRequest.getPageSize();
         // 对普通用户限制一次请求获取条数
-        ThrowUtil.throwIf(pageSize > 20 , ResponseCode.PARAMS_ERROR, "请求过多");
+        ThrowUtil.throwIf(pageSize > 50 , ResponseCode.PARAMS_ERROR, "请求过多");
         // 限定普通用户只能查看审核通过的图片
-        pictureQueryRequest.setReviewStatus(List.of(1));
         Page<Picture> picturePage = pictureService.page(new Page<>(current, pageSize), pictureService.getQueryWrapper(pictureQueryRequest));
         return ResultUtil.success(pictureService.getPictureVOPage(picturePage));
     }
 
+    /**
+     * 获取用户个人空间图片分页数据
+     */
+    @PostMapping("/page/personal/vo")
+    public BaseResponse<Page<PictureVO>> pagePersonalPictureVO(@RequestBody PicturePersonalQueryRequest picturePersonalQueryRequest) {
+        ThrowUtil.throwIf(picturePersonalQueryRequest == null , ResponseCode.PARAMS_ERROR);
+        int current = picturePersonalQueryRequest.getCurrent();
+        int pageSize = picturePersonalQueryRequest.getPageSize();
+        // 获取查询的图片列表
+        List<PictureVO> pictureVOList = pictureService.listPersonalPictureVO(picturePersonalQueryRequest, StrUtil.isNotBlank(picturePersonalQueryRequest.getPicColor()));
+        // 组装page
+        Page<PictureVO> pictureVOPage = new Page<>(current, pageSize, pictureVOList.size());
+        pictureVOPage.setRecords(pictureVOList);
+        return ResultUtil.success(pictureVOPage);
+    }
+
     @PostMapping("/batch/vo")
-    public BaseResponse<List<PictureVO>> listPictureVOBatch(@RequestBody PictureLoadMoreRequest pictureLoadMoreRequest,HttpServletRequest request) {
-        ThrowUtil.throwIf(pictureLoadMoreRequest == null , ResponseCode.PARAMS_ERROR);
-        int pageSize = pictureLoadMoreRequest.getPageSize();
+    public BaseResponse<List<PictureVO>> listPictureVOBatch(@RequestBody PictureQueryRequest pictureQueryRequest ,HttpServletRequest request) {
+        ThrowUtil.throwIf(pictureQueryRequest == null , ResponseCode.PARAMS_ERROR);
+        int pageSize = pictureQueryRequest.getPageSize();
         // 对普通用户限制一次请求获取条数
-        ThrowUtil.throwIf(pageSize > 20 , ResponseCode.PARAMS_ERROR, "请求过多");
+        ThrowUtil.throwIf(pageSize > 60 , ResponseCode.PARAMS_ERROR, "请求过多");
         User loginUser = userService.getLoginUser(request);
         // 区分是否为已登录用户查询
         if (loginUser == null) {
-            List<PictureVO> pictureVOS = pictureService.listPictureVOBatch(pictureLoadMoreRequest);
+            List<PictureVO> pictureVOS = pictureService.listPictureVOBatch(pictureQueryRequest);
             return ResultUtil.success(pictureVOS);
         } else {
             // 未登录用户返回热门标签图片
-            return ResultUtil.success(pictureService.listRecommendPictureVOBatch(pictureLoadMoreRequest));
+            return ResultUtil.success(pictureService.listRecommendPictureVOBatch(pictureQueryRequest));
         }
     }
 

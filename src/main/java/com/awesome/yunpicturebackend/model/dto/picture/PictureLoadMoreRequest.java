@@ -6,6 +6,7 @@ import lombok.Data;
 import java.io.Serializable;
 import java.util.List;
 
+@Deprecated
 @Data
 public class PictureLoadMoreRequest extends PageRequest implements Serializable {
 

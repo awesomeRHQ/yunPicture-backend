@@ -6,6 +6,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.awesome.yunpicturebackend.annotation.AuthCheck;
 import com.awesome.yunpicturebackend.common.ResponseCode;
+import com.awesome.yunpicturebackend.common.utils.ResultUtil;
 import com.awesome.yunpicturebackend.config.CosClientConfig;
 import com.awesome.yunpicturebackend.exception.BusinessException;
 import com.awesome.yunpicturebackend.exception.ThrowUtil;
@@ -13,19 +14,18 @@ import com.awesome.yunpicturebackend.manager.upload.PictureFileUpload;
 import com.awesome.yunpicturebackend.manager.upload.PictureUrlUpload;
 import com.awesome.yunpicturebackend.mapper.PictureMapper;
 import com.awesome.yunpicturebackend.model.dto.file.UploadPictureResult;
-import com.awesome.yunpicturebackend.model.dto.picture.PictureLoadMoreRequest;
-import com.awesome.yunpicturebackend.model.dto.picture.PictureQueryRequest;
-import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadByBatchRequest;
-import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadRequest;
+import com.awesome.yunpicturebackend.model.dto.picture.*;
 import com.awesome.yunpicturebackend.model.entity.Picture;
 import com.awesome.yunpicturebackend.model.entity.Space;
 import com.awesome.yunpicturebackend.model.entity.User;
 import com.awesome.yunpicturebackend.model.enums.SortOrderEnum;
+import com.awesome.yunpicturebackend.model.enums.TimePeriodEnum;
 import com.awesome.yunpicturebackend.model.enums.UserRoleEnum;
 import com.awesome.yunpicturebackend.model.vo.picture.PictureVO;
 import com.awesome.yunpicturebackend.service.PictureService;
 import com.awesome.yunpicturebackend.service.SpaceService;
 import com.awesome.yunpicturebackend.service.UserService;
+import com.awesome.yunpicturebackend.util.ColorSimilarityUtil;
 import com.awesome.yunpicturebackend.util.StringUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -50,6 +50,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -127,6 +128,12 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         picture.setName(uploadPictureResult.getName());
         picture.setUserId(loginUser.getId());
         picture.setSpaceId(spaceId);
+        // 若指定了空间Id，则图片默认为不公开的
+        if (spaceId > 0){
+            picture.setDoPub(0);
+        } else {
+            picture.setDoPub(1);
+        }
         picture.setUrl(uploadPictureResult.getUrl());
         picture.setCompressUrl(uploadPictureResult.getCompressUrl());
         picture.setPicSize(uploadPictureResult.getPicSize());
@@ -134,6 +141,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         picture.setPicHeight(uploadPictureResult.getPicHeight());
         picture.setPicScale(uploadPictureResult.getPicScale());
         picture.setPicFormat(uploadPictureResult.getPicFormat());
+        picture.setPicColor(uploadPictureResult.getPicColor());
         picture.setUploadSource(uploadSource.toString());
         // 存在自定义图片信息，则选择自定义信息
         if (pictureUploadRequest != null) {
@@ -255,7 +263,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         return uploadCount;
     }
 
-    // todo 进入详细页面获取质量高的图片
+    // todo 进入图片详细页面获取质量高的图片
     public String getImgUrl(String linkUrl) {
         // 要抓取的地址
         String fetchUrl = String.format("https://www.bing.com%s", linkUrl);
@@ -301,14 +309,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
     /**
      * 获取图片列表
      *
-     * @param pictureQueryRequest 查询条件
+     * @param pictureAdminQueryRequest 查询条件
      * @return 图片列表
      */
     @Override
-    public List<Picture> getPictureList(PictureQueryRequest pictureQueryRequest) {
+    public List<Picture> getPictureList(PictureAdminQueryRequest pictureAdminQueryRequest) {
         List<Picture> pictureList = new ArrayList<>();
-        if (pictureQueryRequest != null) {
-            QueryWrapper<Picture> queryWrapper = getQueryWrapper(pictureQueryRequest);
+        if (pictureAdminQueryRequest != null) {
+            QueryWrapper<Picture> queryWrapper = getQueryWrapper(pictureAdminQueryRequest);
             pictureList = this.list(queryWrapper);
         }
         return pictureList;
@@ -355,21 +363,61 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         return pictureVOPage;
     }
 
+    @Override
+    public List<PictureVO> listPersonalPictureVO(PicturePersonalQueryRequest picturePersonalQueryRequest, boolean searchPicColor) {
+        // 1.参数校验
+        ThrowUtil.throwIf(picturePersonalQueryRequest == null , ResponseCode.PARAMS_ERROR);
+        // 一定要空间数据
+        Long spaceId = picturePersonalQueryRequest.getSpaceId();
+        ThrowUtil.throwIf( spaceId == null || spaceId == 0 , ResponseCode.PARAMS_ERROR, "当前空间不存在");
+        List<PictureVO> pictureVOList = new ArrayList<>();
+        // 2.查询出当前空间图片
+        QueryWrapper<Picture> queryWrapper = this.getQueryWrapper(picturePersonalQueryRequest);
+        List<Picture> pictureList = this.list(queryWrapper);
+        if (pictureList.isEmpty()) {
+            return pictureVOList;
+        }
+        // 3.若需要查询相似颜色，则计算并筛选相似度大于等于0.80的数据
+        // 查找颜色相似度
+        // todo 可以优先通过前端指定颜色的阈值过滤掉一批颜色数据，提高效率
+        List<Picture> similarColorPictureList = new ArrayList<>();
+        if (searchPicColor){
+            // 计算并筛选颜色相似度
+            similarColorPictureList = pictureList.stream().filter(picture -> {
+                String picColor = picture.getPicColor();
+                // 没有主色调直接跳过
+                if (StrUtil.isBlank(picColor)){
+                    return false;
+                }
+                // 计算相似度
+                double similarity = ColorSimilarityUtil.calculateSimilarity(picColor, picturePersonalQueryRequest.getPicColor());
+                // 筛选出色彩相似度大于等于0.8的图片
+                if (similarity >= 0.8) {
+                    return true;
+                }
+                return false;
+            }).collect(Collectors.toList());
+        }
+        // 4.将Picture转化为PictureVO
+        if (searchPicColor){
+            pictureVOList = similarColorPictureList.stream().map(PictureVO::objToVO).collect(Collectors.toList());
+        } else {
+            pictureVOList = pictureList.stream().map(PictureVO::objToVO).collect(Collectors.toList());
+        }
+        // 5.返回
+        return pictureVOList;
+    }
+
     /**
      * 分批获取脱敏图片列表（用于未登录用户）
      *
-     * @param pictureLoadMoreRequest 查询请求对象
+     * @param pictureQueryRequest 查询请求对象
      * @return 图片列表
      */
     @Override
-    public List<PictureVO> listPictureVOBatch(PictureLoadMoreRequest pictureLoadMoreRequest) {
-        int current = pictureLoadMoreRequest.getCurrent();
-        int pageSize = pictureLoadMoreRequest.getPageSize();
-        // 为了调用 getQueryWrapper 方法创建匹配的参数对象
-        PictureQueryRequest pictureQueryRequest = new PictureQueryRequest();
-        BeanUtils.copyProperties(pictureLoadMoreRequest, pictureQueryRequest);
-        // 限定普通用户只能查看审核通过的图片
-        pictureQueryRequest.setReviewStatus(List.of(1));
+    public List<PictureVO> listPictureVOBatch(PictureQueryRequest pictureQueryRequest) {
+        int current = pictureQueryRequest.getCurrent();
+        int pageSize = pictureQueryRequest.getPageSize();
         Page<Picture> picturePage = this.page(new Page<>(current, pageSize), getQueryWrapper(pictureQueryRequest));
         return this.getPictureVOList(picturePage.getRecords());
     }
@@ -377,19 +425,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
     /**
      * 分批获取推荐脱敏图片列表（用于登录用户）
      *
-     * @param pictureLoadMoreRequest 查询请求对象
+     * @param pictureQueryRequest 查询请求对象
      * @return 图片列表
      */
     @AuthCheck(mustRole = "user")
     @Override
-    public List<PictureVO> listRecommendPictureVOBatch(PictureLoadMoreRequest pictureLoadMoreRequest) {
-        int current = pictureLoadMoreRequest.getCurrent();
-        int pageSize = pictureLoadMoreRequest.getPageSize();
-        // 为了调用 getQueryWrapper 方法创建匹配的参数对象
-        PictureQueryRequest pictureQueryRequest = new PictureQueryRequest();
-        BeanUtils.copyProperties(pictureLoadMoreRequest, pictureQueryRequest);
-        // 限定普通用户只能查看审核通过的图片
-        pictureQueryRequest.setReviewStatus(List.of(1));
+    public List<PictureVO> listRecommendPictureVOBatch(PictureQueryRequest pictureQueryRequest) {
+        int current = pictureQueryRequest.getCurrent();
+        int pageSize = pictureQueryRequest.getPageSize();
         // todo 结合用户的搜索偏好返回数据
         Page<Picture> picturePage = this.page(new Page<>(current, pageSize), getQueryWrapper(pictureQueryRequest));
         return this.getPictureVOList(picturePage.getRecords());
@@ -397,28 +440,64 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
 
     @Override
     public QueryWrapper<Picture> getQueryWrapper(PictureQueryRequest pictureQueryRequest) {
-        Long id = pictureQueryRequest.getId();
-        String name = pictureQueryRequest.getName();
-        String introduction = pictureQueryRequest.getIntroduction();
-        String category = pictureQueryRequest.getCategory();
-        List<String> tagList = pictureQueryRequest.getTags();
         String searchText = pictureQueryRequest.getSearchText();
-        List<Integer> reviewStatus = pictureQueryRequest.getReviewStatus();
-        Long userId = pictureQueryRequest.getUserId();
-        Long spaceId = pictureQueryRequest.getSpaceId();
+        String category = pictureQueryRequest.getCategory();
+        List<String> tags = pictureQueryRequest.getTags();
         String sortField = pictureQueryRequest.getSortField();
         String sortOrder = pictureQueryRequest.getSortOrder();
 
         QueryWrapper<Picture> pictureQueryWrapper = new QueryWrapper<>();
+        pictureQueryWrapper.and(StrUtil.isNotBlank(searchText),
+                wrapper ->
+                        wrapper.or(qw -> qw.like("name", searchText))
+                                .or(qw -> qw.like("introduction", searchText))
+                                .or(qw -> qw.like("tags", searchText))
+                                .or(qw -> qw.like("category", searchText))
+        );
+
+        pictureQueryWrapper.eq(StrUtil.isNotBlank(category),"category", category);
+
+        if (tags != null && !tags.isEmpty()){
+            tags.forEach(tag -> {
+                pictureQueryWrapper.like("tags", "\"" + tag + "\"");
+            });
+        }
+
+        // 只能查看公共图库或者私有图库公开的图片
+        pictureQueryWrapper.and(wrapper ->
+            wrapper.or(qw -> qw.eq("spaceId", 0))
+                    .or(qw -> qw.eq("doPub",1))
+        );
+        // 且必须为审核通过的图片
+        pictureQueryWrapper.eq("reviewStatus", 1);
+
+        return pictureQueryWrapper;
+    }
+
+    @Override
+    public QueryWrapper<Picture> getQueryWrapper(PictureAdminQueryRequest pictureAdminQueryRequest) {
+        Long id = pictureAdminQueryRequest.getId();
+        String name = pictureAdminQueryRequest.getName();
+        String category = pictureAdminQueryRequest.getCategory();
+        List<String> tagList = pictureAdminQueryRequest.getTags();
+        String searchText = pictureAdminQueryRequest.getSearchText();
+        List<Integer> reviewStatus = pictureAdminQueryRequest.getReviewStatus();
+        Long userId = pictureAdminQueryRequest.getUserId();
+        Long spaceId = pictureAdminQueryRequest.getSpaceId();
+        Integer doPub = pictureAdminQueryRequest.getDoPub();
+        String sortField = pictureAdminQueryRequest.getSortField();
+        String sortOrder = pictureAdminQueryRequest.getSortOrder();
+
+        QueryWrapper<Picture> pictureQueryWrapper = new QueryWrapper<>();
         pictureQueryWrapper.like(id != null && id > 0, "id", id);
         pictureQueryWrapper.like(StrUtil.isNotBlank(name), "name", name);
-        pictureQueryWrapper.like(StrUtil.isNotBlank(introduction), "introduction", introduction);
         pictureQueryWrapper.like(StrUtil.isNotBlank(category), "category", category);
         pictureQueryWrapper.and(StrUtil.isNotBlank(searchText),
                 q -> q.or(
                         i -> i.like("name", searchText).or().like("introduction", searchText).or().like("tags", searchText)
                 )
         );
+        // 审核状态查询
         if (CollUtil.isNotEmpty(reviewStatus)) {
             // sql: and (x or x)
             pictureQueryWrapper.and(wrapper -> {
@@ -434,12 +513,91 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             });
         }
         pictureQueryWrapper.eq(userId != null && userId > 0, "userId", userId);
-        // 若未指定空间，则默认查看公开图片
-        if (spaceId == null || spaceId <= 0){
-            pictureQueryWrapper.eq("spaceId", 0);
-        } else {
+        pictureQueryWrapper.eq(spaceId > 0 ,"spaceId", spaceId);
+        pictureQueryWrapper.eq(doPub >= 0,"doPub", doPub);
+        pictureQueryWrapper.orderBy(StrUtil.isNotBlank(sortField), SortOrderEnum.ASC.getValue().equals(sortOrder), sortField);
+
+        return pictureQueryWrapper;
+    }
+
+    @Override
+    public QueryWrapper<Picture> getQueryWrapper(PicturePersonalQueryRequest picturePersonalQueryRequest) {
+        ThrowUtil.throwIf(picturePersonalQueryRequest == null , ResponseCode.PARAMS_ERROR);
+        Long id = picturePersonalQueryRequest.getId();
+        String name = picturePersonalQueryRequest.getName();
+        String category = picturePersonalQueryRequest.getCategory();
+        List<String> tags = picturePersonalQueryRequest.getTags();
+        String picFormat = picturePersonalQueryRequest.getPicFormat();
+        String picColor = picturePersonalQueryRequest.getPicColor();
+        String searchText = picturePersonalQueryRequest.getSearchText();
+        List<Integer> reviewStatus = picturePersonalQueryRequest.getReviewStatus();
+        String timePeriod = picturePersonalQueryRequest.getTimePeriod();
+        Long spaceId = picturePersonalQueryRequest.getSpaceId();
+        Integer doPub = picturePersonalQueryRequest.getDoPub();
+        String sortField = picturePersonalQueryRequest.getSortField();
+        String sortOrder = picturePersonalQueryRequest.getSortOrder();
+
+        QueryWrapper<Picture> pictureQueryWrapper = new QueryWrapper<>();
+        // 必须指定空间
+        if (spaceId != null && spaceId > 0){
             pictureQueryWrapper.eq("spaceId", spaceId);
+        } else {
+           throw new BusinessException(ResponseCode.NOT_FOUND_ERROR, "空间数据异常");
         }
+        pictureQueryWrapper.like(id != null && id > 0, "id", id);
+        pictureQueryWrapper.like(StrUtil.isNotBlank(name), "name", name);
+        pictureQueryWrapper.like(StrUtil.isNotBlank(category), "category", category);
+        // todo 使用ES分词搜索图片名称和简介
+        pictureQueryWrapper.and(StrUtil.isNotBlank(searchText),
+                q -> q.or(
+                        i -> i.like("name", searchText).or().like("introduction", searchText).or().like("tags", searchText)
+                )
+        );
+        if (CollUtil.isNotEmpty(reviewStatus)) {
+            // sql: and (x or x)
+            pictureQueryWrapper.and(wrapper -> {
+                reviewStatus.forEach(status -> {
+                    wrapper.or(r -> r.eq("reviewStatus", status));
+                });
+            });
+        }
+        // JSON数组查询
+        if (CollUtil.isNotEmpty(tags)) {
+            tags.forEach(tag -> {
+                pictureQueryWrapper.like("tags", "\"" + tag + "\"");
+            });
+        }
+        pictureQueryWrapper.eq(StrUtil.isNotBlank(picFormat),"pictureFormat", picFormat);
+
+        // 当需要查询色彩相似度时，先过滤缺失相似度的数据
+        pictureQueryWrapper.isNotNull(StrUtil.isNotBlank(picColor), "picColor");
+
+        // 查询图片时间段
+        if (StrUtil.isNotBlank(timePeriod)) {
+            // 获取当前时间
+            LocalDateTime now = LocalDateTime.now();
+            TimePeriodEnum timePeriodEnum = TimePeriodEnum.getEnumByValue(timePeriod);
+            // 根据不同时间段设置查询条件
+            switch (timePeriodEnum) {
+                case INANHOUR:
+                    LocalDateTime inOneHour = now.minusHours(1);
+                    pictureQueryWrapper.ge("createTime", inOneHour);
+                    break;
+                case INPASSTFHOURS:
+                    LocalDateTime inPass24Hours = now.minusDays(1);
+                    pictureQueryWrapper.ge("createTime", inPass24Hours);
+                    break;
+                case INPASSWEEK:
+                    LocalDateTime inPassWeek = now.minusWeeks(1);
+                    pictureQueryWrapper.ge("createTime", inPassWeek);
+                case INPASSMONTH:
+                    LocalDateTime inPassMonth = now.minusMonths(1);
+                    pictureQueryWrapper.ge("timePeriod", timePeriod);
+                    break;
+            }
+        }
+
+        pictureQueryWrapper.eq(doPub != null && doPub >= 0,"doPub", doPub);
 
         pictureQueryWrapper.orderBy(StrUtil.isNotBlank(sortField), SortOrderEnum.ASC.getValue().equals(sortOrder), sortField);
         return pictureQueryWrapper;

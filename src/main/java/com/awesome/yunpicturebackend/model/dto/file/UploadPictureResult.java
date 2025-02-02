@@ -47,6 +47,11 @@ public class UploadPictureResult implements Serializable {
      */
     private String picFormat;
 
+    /**
+     * 图片主色调
+     */
+    private String picColor;
+
     private static final long serialVersionUID = 4125079506489694359L;
 
 }

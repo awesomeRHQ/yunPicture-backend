@@ -1,4 +1,4 @@
-package com.awesome.yunpicturebackend.model.enums;
+package com.awesome.yunpicturebackend.model.enums.space;
 
 import cn.hutool.core.util.ObjUtil;
 import lombok.Getter;
@@ -42,6 +42,21 @@ public enum SpaceLevelEnum {
         for (SpaceLevelEnum spaceLevelEnum : SpaceLevelEnum.values()) {
             if (spaceLevelEnum.value == value) {
                 return spaceLevelEnum;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 根据 value 获取枚举文本
+     */
+    public static String getEnumTextByValue(Integer value) {
+        if (ObjUtil.isEmpty(value)) {
+            return null;
+        }
+        for (SpaceLevelEnum spaceLevelEnum : SpaceLevelEnum.values()) {
+            if (spaceLevelEnum.value == value) {
+                return spaceLevelEnum.text;
             }
         }
         return null;

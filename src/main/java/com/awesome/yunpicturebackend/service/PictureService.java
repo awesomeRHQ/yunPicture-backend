@@ -1,10 +1,7 @@
 package com.awesome.yunpicturebackend.service;
 
 
-import com.awesome.yunpicturebackend.model.dto.picture.PictureLoadMoreRequest;
-import com.awesome.yunpicturebackend.model.dto.picture.PictureQueryRequest;
-import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadByBatchRequest;
-import com.awesome.yunpicturebackend.model.dto.picture.PictureUploadRequest;
+import com.awesome.yunpicturebackend.model.dto.picture.*;
 import com.awesome.yunpicturebackend.model.entity.Picture;
 import com.awesome.yunpicturebackend.model.entity.User;
 import com.awesome.yunpicturebackend.model.vo.picture.PictureVO;
@@ -47,10 +44,10 @@ public interface PictureService extends IService<Picture> {
 
     /**
      * 获取图片列表
-     * @param pictureQueryRequest 查询条件
+     * @param pictureAdminQueryRequest 查询条件
      * @return 图片列表
      */
-    List<Picture> getPictureList(PictureQueryRequest pictureQueryRequest);
+    List<Picture> getPictureList(PictureAdminQueryRequest pictureAdminQueryRequest);
 
     /**
      * 获取脱敏图片分页列表
@@ -67,18 +64,26 @@ public interface PictureService extends IService<Picture> {
     Page<PictureVO> getPictureVOPage(Page<Picture> picturePage);
 
     /**
+     * 获取个人图库图片列表
+     * @param picturePersonalQueryRequest
+     * @param searchPicColor 是否需要过滤颜色
+     * @return
+     */
+    List<PictureVO> listPersonalPictureVO(PicturePersonalQueryRequest picturePersonalQueryRequest, boolean searchPicColor);
+
+    /**
      * 分批获取脱敏图片列表（用于未登录用户）
-     * @param pictureLoadMoreRequest 查询请求对象
+     * @param pictureQueryRequest 查询请求对象
      * @return 图片列表
      */
-    List<PictureVO> listPictureVOBatch(PictureLoadMoreRequest pictureLoadMoreRequest);
+    List<PictureVO> listPictureVOBatch(PictureQueryRequest pictureQueryRequest);
 
     /**
      * 分批获取推荐脱敏图片列表（用于登录用户）
-     * @param pictureLoadMoreRequest 查询请求对象
+     * @param pictureQueryRequest 查询请求对象
      * @return 图片列表
      */
-    List<PictureVO> listRecommendPictureVOBatch(PictureLoadMoreRequest pictureLoadMoreRequest);
+    List<PictureVO> listRecommendPictureVOBatch(PictureQueryRequest pictureQueryRequest);
 
     /**
      * 拼接查询条件
@@ -86,6 +91,20 @@ public interface PictureService extends IService<Picture> {
      * @return
      */
     QueryWrapper<Picture> getQueryWrapper(PictureQueryRequest pictureQueryRequest);
+
+    /**
+     * 拼接查询条件
+     * @param pictureAdminQueryRequest 管理员查询请求类
+     * @return
+     */
+    QueryWrapper<Picture> getQueryWrapper(PictureAdminQueryRequest pictureAdminQueryRequest);
+
+    /**
+     * 拼接查询条件
+     * @param picturePersonalQueryRequest 用户个人查询请求类
+     * @return
+     */
+    QueryWrapper<Picture> getQueryWrapper(PicturePersonalQueryRequest picturePersonalQueryRequest);
 
     /**
      * 设置图片审核信息

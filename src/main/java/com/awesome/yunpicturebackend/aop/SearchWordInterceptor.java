@@ -1,12 +1,9 @@
 package com.awesome.yunpicturebackend.aop;
 
 import cn.hutool.core.util.StrUtil;
-import com.awesome.yunpicturebackend.common.ResponseCode;
-import com.awesome.yunpicturebackend.exception.ThrowUtil;
-import com.awesome.yunpicturebackend.model.dto.picture.PictureLoadMoreRequest;
+import com.awesome.yunpicturebackend.model.dto.picture.PictureQueryRequest;
 import com.awesome.yunpicturebackend.model.entity.User;
 import com.awesome.yunpicturebackend.model.entity.UserSearchLog;
-import com.awesome.yunpicturebackend.model.enums.BrowserEnum;
 import com.awesome.yunpicturebackend.service.UserSearchLogService;
 import com.awesome.yunpicturebackend.service.UserService;
 import com.awesome.yunpicturebackend.util.ClientInfoUtil;
@@ -18,7 +15,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
-
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.Date;
@@ -46,8 +42,8 @@ public class SearchWordInterceptor {
         if (args == null || args.length == 0) {
             log.error("SearchWordInterceptor：搜索关键词信息获取失败");
             result = joinPoint.proceed();
-        }else {
-            PictureLoadMoreRequest r = (PictureLoadMoreRequest) args[0];
+        } else {
+            PictureQueryRequest r = (PictureQueryRequest) args[0];
             String searchText = r.getSearchText();
             if (StrUtil.isBlank(searchText)) {
                 return joinPoint.proceed();
@@ -67,7 +63,7 @@ public class SearchWordInterceptor {
             userSearchLog.setCreate_time(new Date());
             userSearchLogService.save(userSearchLog);
             boolean isSuccessful = true;
-            try{
+            try {
                 // 执行目标方法
                 result = joinPoint.proceed();
             } catch (Exception e) {

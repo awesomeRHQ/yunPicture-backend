@@ -1,12 +1,18 @@
 package com.awesome.yunpicturebackend.model.dto.picture;
 
+import com.awesome.yunpicturebackend.common.PageRequest;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.io.Serializable;
 import java.util.List;
 
+/**
+ * 管理员图片查询请求类
+ */
+@EqualsAndHashCode(callSuper = true)
 @Data
-public class PictureUpdateRequest implements Serializable {
+public class PictureAdminQueryRequest extends PageRequest implements Serializable {
 
     /**
      * id
@@ -19,11 +25,6 @@ public class PictureUpdateRequest implements Serializable {
     private String name;
 
     /**
-     * 简介
-     */
-    private String introduction;
-
-    /**
      * 分类
      */
     private String category;
@@ -34,7 +35,28 @@ public class PictureUpdateRequest implements Serializable {
     private List<String> tags;
 
     /**
-     * 用户Id
+     * 文件体积
+     */
+    private Long picSize;
+
+
+    /**
+     * 图片格式
+     */
+    private String picFormat;
+
+    /**
+     * 搜索词（同时搜名称、简介等）
+     */
+    private String searchText;
+
+    /**
+     * 审核状态
+     */
+    private List<Integer> reviewStatus;
+
+    /**
+     * 用户 id
      */
     private Long userId;
 
@@ -49,4 +71,5 @@ public class PictureUpdateRequest implements Serializable {
     private Integer doPub;
 
     private static final long serialVersionUID = 1L;
+
 }

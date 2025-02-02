@@ -83,6 +83,11 @@ public class PictureVO implements Serializable {
     private String picFormat;
 
     /**
+     * 图片主色调
+     */
+    private String picColor;
+
+    /**
      * 编辑时间
      */
     private Date editTime;
@@ -98,6 +103,11 @@ public class PictureVO implements Serializable {
     private Integer reviewStatus;
 
     /**
+     * 审核信息
+     */
+    private String reviewMessage;
+
+    /**
      * 创建用户
      */
     private UserVO userVO;
@@ -106,6 +116,11 @@ public class PictureVO implements Serializable {
      * 所属空间Id
      */
     private Long spaceId;
+
+    /**
+     * 是否公开（用于用户图库）：0-不公开；1-公开
+     */
+    private Integer doPub;
 
     /**
      * vo转实体类
@@ -119,6 +134,20 @@ public class PictureVO implements Serializable {
         BeanUtils.copyProperties(pictureVO, picture);
         picture.setTags(JSONUtil.toJsonStr(pictureVO.getTags()));
         return picture;
+    }
+
+    /**
+     * vo转实体类
+     * @param picture 实体
+     */
+    public static PictureVO objToVO(Picture picture) {
+        if (picture == null) {
+            return null;
+        }
+        PictureVO pictureVO = new PictureVO();
+        BeanUtils.copyProperties(picture, pictureVO);
+        pictureVO.setTags(JSONUtil.toList(picture.getTags(), String.class));
+        return pictureVO;
     }
 
 }

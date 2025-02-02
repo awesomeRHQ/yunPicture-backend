@@ -78,6 +78,11 @@ public class Picture implements Serializable {
     private String picFormat;
 
     /**
+     * 图片主色调
+     */
+    private String picColor;
+
+    /**
      * 创建用户Id
      */
     private Long userId;
@@ -86,6 +91,11 @@ public class Picture implements Serializable {
      * 所属空间Id
      */
     private Long spaceId;
+
+    /**
+     * 是否公开（用于用户图库）：0-不公开；1-公开
+     */
+    private Integer doPub;
 
     /**
      * 图片源

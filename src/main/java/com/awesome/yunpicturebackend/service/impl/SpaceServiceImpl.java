@@ -1,6 +1,5 @@
 package com.awesome.yunpicturebackend.service.impl;
 
-import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.awesome.yunpicturebackend.common.ResponseCode;
 import com.awesome.yunpicturebackend.exception.BusinessException;
@@ -12,23 +11,24 @@ import com.awesome.yunpicturebackend.model.entity.Picture;
 import com.awesome.yunpicturebackend.model.entity.Space;
 import com.awesome.yunpicturebackend.model.entity.User;
 import com.awesome.yunpicturebackend.model.enums.SortOrderEnum;
-import com.awesome.yunpicturebackend.model.enums.SpaceLevelEnum;
+import com.awesome.yunpicturebackend.model.enums.space.SpaceLevelEnum;
 import com.awesome.yunpicturebackend.model.enums.UserRoleEnum;
+import com.awesome.yunpicturebackend.model.enums.space.SpaceTypeEnum;
+import com.awesome.yunpicturebackend.model.vo.space.SpaceInfo;
 import com.awesome.yunpicturebackend.model.vo.space.SpaceVO;
 import com.awesome.yunpicturebackend.service.PictureService;
 import com.awesome.yunpicturebackend.service.SpaceService;
 import com.awesome.yunpicturebackend.service.UserService;
+import com.awesome.yunpicturebackend.util.ValidateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -198,6 +198,22 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space> implements
         if (space.getMaxSize() == space.getTotalSize()){
             throw new BusinessException(ResponseCode.OPERATION_ERROR,"已达空间最大容量");
         }
+    }
+
+    @Override
+    public SpaceInfo getSpaceInfoBySpaceId(Long spaceId) {
+        if (ValidateUtil.isNullOrNotPositive(spaceId)) {
+            throw new BusinessException(ResponseCode.PARAMS_ERROR);
+        }
+        Space space = this.getById(spaceId);
+        if (space == null){
+            return null;
+        }
+        SpaceInfo spaceInfo = new SpaceInfo();
+        BeanUtils.copyProperties(space, spaceInfo);
+        spaceInfo.setSpaceType(SpaceTypeEnum.getEnumTextByValue(space.getSpaceType()));
+        spaceInfo.setSpaceLevel(SpaceLevelEnum.getEnumTextByValue(space.getSpaceLevel()));
+        return spaceInfo;
     }
 
     @Override

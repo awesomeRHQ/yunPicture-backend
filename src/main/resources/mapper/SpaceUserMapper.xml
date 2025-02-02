@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.awesome.yunpicturebackend.mapper.SpaceUserMapper">
+
+    <resultMap type="com.awesome.yunpicturebackend.model.entity.SpaceUser" id="SpaceUserMap">
+        <result property="id" column="id" jdbcType="INTEGER"/>
+        <result property="spaceId" column="spaceId" jdbcType="INTEGER"/>
+        <result property="userId" column="userId" jdbcType="INTEGER"/>
+        <result property="spaceRole" column="spaceRole" jdbcType="VARCHAR"/>
+        <result property="createTime" column="createTime" jdbcType="TIMESTAMP"/>
+        <result property="updateTime" column="updateTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,
+        spaceId,
+        userId,
+        spaceRole,
+        createTime,
+        updateTime,
+    </sql>
+
+</mapper>
+

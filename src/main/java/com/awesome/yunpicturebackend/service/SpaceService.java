@@ -4,6 +4,7 @@ import com.awesome.yunpicturebackend.model.dto.space.SpaceAddRequest;
 import com.awesome.yunpicturebackend.model.dto.space.SpaceQueryRequest;
 import com.awesome.yunpicturebackend.model.entity.Space;
 import com.awesome.yunpicturebackend.model.entity.User;
+import com.awesome.yunpicturebackend.model.vo.space.SpaceInfo;
 import com.awesome.yunpicturebackend.model.vo.space.SpaceVO;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -56,6 +57,13 @@ public interface SpaceService extends IService<Space> {
      * @param spaceId 空间id
      */
     void checkSpaceQuota(Long spaceId);
+
+    /**
+     * 根据空间Id获取空间基本信息
+     * @param spaceId 空间Id
+     * @return 空间基本信息
+     */
+    SpaceInfo getSpaceInfoBySpaceId(Long spaceId);
 
     /**
      * 构造QueryWrapper
