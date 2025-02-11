@@ -1,12 +1,37 @@
 {
     "moduleRolePermissions": [
       {
+        "module": "main",
+        "rolePermissions":[
+          {
+            "role" : "admin",
+            "permissions": ["manage"],
+            "description": "全局权限"
+          },
+          {
+            "role" : "user",
+            "permissions": [],
+            "description": "一般权限"
+          }
+        ]
+      },
+      {
         "module": "space_user",
         "rolePermissions":[
           {
             "role" : "admin",
-            "permissions": ["CREATE","UPDATE","DELETE","READ"],
-            "description": "对空间人员进行增删改查"
+            "permissions": ["add","delete","update","edit","read"],
+            "description": "所有权限"
+          },
+          {
+            "role" : "editor",
+            "permissions": ["read"],
+            "description": "查看成员"
+          },
+          {
+            "role" : "viewer",
+            "permissions": ["read"],
+            "description": "查看成员"
           }
         ]
       },
@@ -15,17 +40,17 @@
         "rolePermissions":[
           {
             "role" : "admin",
-            "permissions": ["CREATE","UPDATE","DELETE","READ"],
-            "description": "对图片进行增删改查"
+            "permissions": ["add","delete","update","edit","read"],
+            "description": "所有权限"
           },
           {
             "role" : "editor",
-            "permissions": ["CREATE","UPDATE","DELETE","READ"],
-            "description": "对图片进行增删改查"
+            "permissions": ["add","delete","edit","read"],
+            "description": "对图片进行编辑和浏览"
           },
           {
             "role" : "viewer",
-            "permissions": ["READ"],
+            "permissions": ["read"],
             "description": "查看图片"
           }
         ]

@@ -11,18 +11,22 @@ import com.awesome.yunpicturebackend.common.ResponseCode;
 import com.awesome.yunpicturebackend.exception.ThrowUtil;
 import com.awesome.yunpicturebackend.manager.auth.model.AuthContext;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.Map;
 
+@Component
 public class AuthContextUtil {
 
     @Value("${server.servlet.context-path}")
-    private static String CONTEXT_PATH;
+    private String CONTEXT_PATH;
 
-    public static AuthContext getAuthContext(HttpServletRequest request) {
+    public AuthContext getAuthContext(HttpServletRequest request) {
         // 1.参数校验
         ThrowUtil.throwIf(request == null, ResponseCode.OPERATION_ERROR);
         String contentType = request.getHeader(Header.CONTENT_TYPE.getValue());
@@ -34,11 +38,9 @@ public class AuthContextUtil {
         String pathUri = uri.replace(CONTEXT_PATH + "/", ""); //  module/op/...
         // 获取 去除"api/"后，直到第一个"/"前的部分字符串
         String moduleName = StrUtil.subBefore(pathUri, "/", false);
-        authContext.setModuleName(moduleName);
         // 根据pathUri获取当前操作 => module/op/...
-        String opUri = pathUri.replace("/" + moduleName + "/", ""); //  op/...
-        String opName = StrUtil.subAfter(opUri, "/", false);
-        authContext.setOpName(opName);
+        String opUri = pathUri.replace(moduleName + "/", ""); //  op/...
+        String opName = StrUtil.subBefore(opUri, "/", false);
         // 4.获取模块请求信息中的关键鉴别信息：pictureId，userId，spaceId
         // 兼容 get 和 post 操作
         if (ContentType.JSON.getValue().equals(contentType)) {
@@ -67,6 +69,8 @@ public class AuthContextUtil {
                 default:
             }
         }
+        authContext.setModuleName(moduleName);
+        authContext.setOpName(opName);
         return authContext;
     }
 }

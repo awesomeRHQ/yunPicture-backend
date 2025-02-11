@@ -8,6 +8,8 @@ import java.util.List;
 @Data
 public class PictureUploadRequest implements Serializable {
 
+    private Long pictureId;
+
     private String pictureName;
 
     private String category;

@@ -12,16 +12,21 @@ import com.awesome.yunpicturebackend.model.dto.space.SpaceAddRequest;
 import com.awesome.yunpicturebackend.model.dto.space.SpaceEditRequest;
 import com.awesome.yunpicturebackend.model.dto.space.SpaceQueryRequest;
 import com.awesome.yunpicturebackend.model.dto.space.SpaceUpdateRequest;
+import com.awesome.yunpicturebackend.model.dto.spaceuser.SpaceUserAddRequest;
 import com.awesome.yunpicturebackend.model.entity.Space;
+import com.awesome.yunpicturebackend.model.entity.SpaceUser;
 import com.awesome.yunpicturebackend.model.entity.User;
 import com.awesome.yunpicturebackend.model.enums.space.SpaceLevelEnum;
 import com.awesome.yunpicturebackend.model.enums.UserRoleEnum;
 import com.awesome.yunpicturebackend.model.vo.space.SpaceLevel;
 import com.awesome.yunpicturebackend.service.SpaceService;
+import com.awesome.yunpicturebackend.service.SpaceUserService;
 import com.awesome.yunpicturebackend.service.UserService;
+import com.awesome.yunpicturebackend.util.ValidateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.beans.BeanUtils;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -40,6 +45,12 @@ public class SpaceController {
     @Resource
     private SpaceService spaceService;
 
+    @Resource
+    private SpaceUserService spaceUserService;
+
+    @Resource
+    private TransactionTemplate transactionTemplate;
+
     @PostMapping("/save")
     public BaseResponse<Boolean> saveSpace(@RequestBody SpaceAddRequest spaceAddRequest) {
         // 1.校验请求参数
@@ -52,8 +63,28 @@ public class SpaceController {
         space.setSpaceType(spaceAddRequest.getSpaceType());
         space.setUserId(spaceAddRequest.getUserId());
         // 4.新增
-        boolean result = spaceService.save(space);
-        return ResultUtil.success(result);
+        // 保存空间
+        // 同时要保存空间角色数据
+        // 空间创始人，赋管理员
+        boolean addResult = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+            try {
+                // 保存空间
+                boolean saveSpaceResult = spaceService.save(space);
+                // 同时要保存空间角色数据
+                if (saveSpaceResult) {
+                    SpaceUserAddRequest spaceUserAddRequest = new SpaceUserAddRequest();
+                    spaceUserAddRequest.setSpaceId(space.getId());
+                    spaceUserAddRequest.setUserId(space.getUserId());
+                    // 空间创始人，赋管理员
+                    spaceUserAddRequest.setSpaceRole("admin");
+                    return spaceUserService.addSpaceUser(spaceUserAddRequest);
+                }
+            } catch (RuntimeException e) {
+                status.setRollbackOnly();
+            }
+            return false;
+        }));
+        return ResultUtil.success(addResult);
     }
 
     @PostMapping("/delete")
@@ -165,5 +196,16 @@ public class SpaceController {
         return ResultUtil.success(spacePage);
     }
 
+    @PostMapping("/read/list/own")
+    public BaseResponse<List<Space>> listMyOwnSpace(@RequestBody Long userId) {
+        ThrowUtil.throwIf(ValidateUtil.isNullOrNotPositive(userId), ResponseCode.PARAMS_ERROR);
+        return ResultUtil.success(spaceService.listMyOwnSpace(userId));
+    }
+
+    @PostMapping("/read/list/join")
+    public BaseResponse<List<Space>> listMyJoinSpace(@RequestBody Long userId) {
+        ThrowUtil.throwIf(ValidateUtil.isNullOrNotPositive(userId), ResponseCode.PARAMS_ERROR);
+        return ResultUtil.success(spaceService.listMyJoinSpaceByUserId(userId));
+    }
 
 }

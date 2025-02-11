@@ -1,6 +1,7 @@
 package com.awesome.yunpicturebackend.model.enums.space;
 
 import cn.hutool.core.util.ObjUtil;
+import lombok.Getter;
 
 import java.util.Arrays;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.stream.Collectors;
 /**
  * 空间类型枚举
  */
+@Getter
 public enum SpaceTypeEnum {
 
     PRIVATE("私有", 0),

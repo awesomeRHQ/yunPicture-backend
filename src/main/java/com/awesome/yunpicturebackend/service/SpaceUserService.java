@@ -1,5 +1,6 @@
 package com.awesome.yunpicturebackend.service;
 
+import com.awesome.yunpicturebackend.common.DeleteRequest;
 import com.awesome.yunpicturebackend.model.dto.spaceuser.SpaceUserAddRequest;
 import com.awesome.yunpicturebackend.model.dto.spaceuser.SpaceUserQueryRequest;
 import com.awesome.yunpicturebackend.model.entity.Space;
@@ -29,24 +30,31 @@ public interface SpaceUserService extends IService<SpaceUser> {
 
     /**
      * 根据空间Id获取空间用户列表
-     * @param spaceId 空间Id
+     * @param spaceId 空间角色查询请求类
      * @return 空间用户列表
      */
-    List<SpaceUser> getSpaceUserBySpaceId(Long spaceId);
+    List<SpaceUser> listSpaceUserBySpaceId(Long spaceId);
 
     /**
-     * 根据空间Id获取空间用户VO列表
-     * @param spaceId 空间Id
+     * 获取空间用户列表
+     * @param spaceUserQueryRequest 空间角色查询请求类
+     * @return 空间用户列表
+     */
+    List<SpaceUser> listSpaceUser(SpaceUserQueryRequest spaceUserQueryRequest);
+
+    /**
+     * 获取空间用户VO列表
+     * @param spaceUserQueryRequest 空间角色查询请求类
      * @return 空间用户VO列表
      */
-    List<SpaceUserVO> getSpaceUserVOBySpaceId(Long spaceId);
+    List<SpaceUserVO> listSpaceUserVO(SpaceUserQueryRequest spaceUserQueryRequest);
 
     /**
-     * 根据空间Id获取空间用户信息列表
-     * @param spaceId 空间Id
+     * 获取空间用户信息列表
+     * @param spaceUserQueryRequest 空间角色查询请求类
      * @return 空间用户信息列表
      */
-    List<SpaceUserInfo> getSpaceUserInfoByUserId(Long spaceId);
+    List<SpaceUserInfo> listSpaceUserInfo(SpaceUserQueryRequest spaceUserQueryRequest);
 
     /**
      * 根据用户Id获取用户加入的空间

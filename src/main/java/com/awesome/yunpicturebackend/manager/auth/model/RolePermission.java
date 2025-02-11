@@ -16,7 +16,7 @@ public class RolePermission implements Serializable {
     /**
      * 权限列表
      */
-    private List<String> permission;
+    private List<String> permissions;
 
     /**
      * 描述

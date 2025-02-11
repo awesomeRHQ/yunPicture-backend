@@ -21,5 +21,126 @@
         updateTime,
     </sql>
 
+    <select id="listSpaceUser"
+            parameterType="com.awesome.yunpicturebackend.model.dto.spaceuser.SpaceUserQueryRequest"
+            resultType="com.awesome.yunpicturebackend.model.entity.SpaceUser">
+        SELECT su.*
+        FROM space_user su
+                 LEFT JOIN user u ON su.userId = u.id
+        WHERE 1=1 
+        <if test="id != null and id > 0">
+            AND su.id = #{id}
+        </if>
+        <if test="spaceId != null and spaceId > 0">
+            AND spaceId = #{spaceId}
+        </if>
+        <if test="userId != null and userId > 0">
+            AND userId = #{userId}
+        </if>
+        <if test="userName != null and userName != ''">
+            AND userName like CONCAT('%', #{userName}, '%')
+        </if>
+        <if test="spaceRole != null and spaceRole != ''">
+            AND spaceRole = #{spaceRole}
+        </if>
+--         分页
+    </select>
+
+    <resultMap id="spaceUserVOMap" type="com.awesome.yunpicturebackend.model.vo.spaceuser.SpaceUserVO">
+        <id property="id" column="id"/>
+        <result property="spaceRole" column="spaceRole"/>
+        <result property="createTime" column="createTime"/>
+        <result property="updateTime" column="updateTime"/>
+        <!-- 使用 association 映射嵌套对象 -->
+        <association property="userVO" javaType="com.awesome.yunpicturebackend.model.vo.user.UserVO">
+            <id property="id" column="uid"/>
+            <result property="userAccount" column="userAccount"/>
+            <result property="userName" column="userName"/>
+            <result property="userAvatar" column="userAvatar"/>
+            <result property="userProfile" column="userProfile"/>
+            <result property="userRole" column="userRole"/>
+            <result property="createTime" column="createTime"/>
+            <result property="updateTime" column="updateTime"/>
+        </association>
+        <association property="spaceInfo" javaType="com.awesome.yunpicturebackend.model.vo.space.SpaceInfo">
+            <id property="id" column="sid"/>
+            <result property="spaceName" column="spaceName"/>
+            <result property="spaceType" column="spaceType"/>
+            <result property="spaceLevel" column="spaceLevel"/>
+            <result property="createUserId" column="createUserId"/>
+            <result property="createTime" column="createTime"/>
+            <result property="editTime" column="editTime"/>
+        </association>
+    </resultMap>
+    <select id="listSpaceUserVO"
+            parameterType="com.awesome.yunpicturebackend.model.dto.spaceuser.SpaceUserQueryRequest"
+            resultMap="spaceUserVOMap">
+        SELECT su.*,
+               u.id as uid,u.userAccount,u.userName,u.userAvatar,u.userProfile,u.userRole,u.createTime,u.updateTime,
+               s.id as sid,s.spaceName,s.spaceType,s.spaceLevel,s.userId as createUserId,s.createTime,s.updateTime
+        FROM space_user su
+        LEFT JOIN user u ON su.userId = u.id
+        LEFT JOIN space s ON su.spaceId = s.id
+        WHERE 1=1
+        <if test="id != null and id > 0">
+            AND su.id = #{id}
+        </if>
+        <if test="spaceId != null and spaceId > 0">
+            AND spaceId = #{spaceId}
+        </if>
+        <if test="userId != null and userId > 0">
+            AND userId = #{userId}
+        </if>
+        <if test="userName != null and userName != ''">
+            AND userName like CONCAT('%', #{userName}, '%')
+        </if>
+        <if test="spaceRole != null and spaceRole != ''">
+            AND spaceRole = #{spaceRole}
+        </if>
+    </select>
+
+    <resultMap id="spaceUserInfoMap" type="com.awesome.yunpicturebackend.model.vo.spaceuser.SpaceUserInfo">
+        <id property="id" column="id"/>
+        <result property="spaceId" column="spaceId"/>
+        <result property="spaceRole" column="spaceRole"/>
+        <result property="createTime" column="createTime"/>
+        <result property="updateTime" column="updateTime"/>
+        <!-- 使用 association 映射嵌套对象 -->
+        <association property="userVO" javaType="com.awesome.yunpicturebackend.model.vo.user.UserVO">
+            <id property="id" column="uid"/>
+            <result property="userAccount" column="userAccount"/>
+            <result property="userName" column="userName"/>
+            <result property="userAvatar" column="userAvatar"/>
+            <result property="userProfile" column="userProfile"/>
+            <result property="userRole" column="userRole"/>
+            <result property="createTime" column="createTime"/>
+            <result property="updateTime" column="updateTime"/>
+        </association>
+    </resultMap>
+    <select id="listSpaceUserInfo"
+            parameterType="com.awesome.yunpicturebackend.model.dto.spaceuser.SpaceUserQueryRequest"
+            resultMap="spaceUserInfoMap">
+        SELECT su.*,
+        u.id as uid,u.userAccount,u.userName,u.userAvatar,u.userProfile,u.userRole,u.createTime,u.updateTime
+        FROM space_user su
+        LEFT JOIN user u ON su.userId = u.id
+        WHERE 1=1
+        <if test="id != null and id > 0">
+            AND su.id = #{id}
+        </if>
+        <if test="spaceId != null and spaceId > 0">
+            AND spaceId = #{spaceId}
+        </if>
+        <if test="userId != null and userId > 0">
+            AND userId = #{userId}
+        </if>
+        <if test="userName != null and userName != ''">
+            AND userName like CONCAT('%', #{userName}, '%')
+        </if>
+        <if test="spaceRole != null and spaceRole != ''">
+            AND spaceRole = #{spaceRole}
+        </if>
+    </select>
+
 </mapper>
 

@@ -45,7 +45,7 @@ public class ModuleRolePermissionsManager {
         // 遍历模块角色权限列表
         for(ModuleRolePermissions modelRolePermission : moduleRolePermissions){
             // 若找到对应模块名称,则返回角色权限列表
-            if (modelName.equals(modelRolePermission.getModel())){
+            if (modelName.equals(modelRolePermission.getModule())){
                 return modelRolePermission.getRolePermissions();
             }
         }
@@ -58,7 +58,7 @@ public class ModuleRolePermissionsManager {
      * @param role 角色
      * @return 当前模块的角色权限列表
      */
-    public List<String> getPermissionsByRoleName(String modelName, String role){
+    public List<String> getPermissionsByModuleAndRole(String modelName, String role){
         ThrowUtil.throwIf(StrUtil.isBlank(modelName),ResponseCode.OPERATION_ERROR,"模块名称格式错误");
         ThrowUtil.throwIf(StrUtil.isBlank(role),ResponseCode.OPERATION_ERROR,"角色格式错误");
         // 获取模块全部角色权限列表
@@ -67,7 +67,7 @@ public class ModuleRolePermissionsManager {
         for (RolePermission rolePermission : rolePermissions){
             // 若找到对应角色名称,则返回权限列表
             if (role.equals(rolePermission.getRole())){
-                return rolePermission.getPermission();
+                return rolePermission.getPermissions();
             }
         }
         return new ArrayList<>();

@@ -20,6 +20,7 @@ import javax.servlet.http.HttpServletRequest;
 /**
  * 鉴权切面
  */
+@Deprecated
 @Aspect
 @Component
 public class AuthInterceptor {

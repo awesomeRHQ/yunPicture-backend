@@ -7,17 +7,22 @@ import com.awesome.yunpicturebackend.exception.ThrowUtil;
 import com.awesome.yunpicturebackend.mapper.SpaceMapper;
 import com.awesome.yunpicturebackend.model.dto.space.SpaceAddRequest;
 import com.awesome.yunpicturebackend.model.dto.space.SpaceQueryRequest;
+import com.awesome.yunpicturebackend.model.dto.spaceuser.SpaceUserQueryRequest;
 import com.awesome.yunpicturebackend.model.entity.Picture;
 import com.awesome.yunpicturebackend.model.entity.Space;
+import com.awesome.yunpicturebackend.model.entity.SpaceUser;
 import com.awesome.yunpicturebackend.model.entity.User;
 import com.awesome.yunpicturebackend.model.enums.SortOrderEnum;
 import com.awesome.yunpicturebackend.model.enums.space.SpaceLevelEnum;
 import com.awesome.yunpicturebackend.model.enums.UserRoleEnum;
+import com.awesome.yunpicturebackend.model.enums.space.SpaceRoleEnum;
 import com.awesome.yunpicturebackend.model.enums.space.SpaceTypeEnum;
 import com.awesome.yunpicturebackend.model.vo.space.SpaceInfo;
 import com.awesome.yunpicturebackend.model.vo.space.SpaceVO;
+import com.awesome.yunpicturebackend.model.vo.spaceuser.SpaceUserVO;
 import com.awesome.yunpicturebackend.service.PictureService;
 import com.awesome.yunpicturebackend.service.SpaceService;
+import com.awesome.yunpicturebackend.service.SpaceUserService;
 import com.awesome.yunpicturebackend.service.UserService;
 import com.awesome.yunpicturebackend.util.ValidateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -29,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -49,6 +55,10 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space> implements
     @Resource
     @Lazy
     private PictureService pictureService;
+
+    @Resource
+    @Lazy
+    private SpaceUserService spaceUserService;
 
     /**
      * 验证空间信息
@@ -214,6 +224,28 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space> implements
         spaceInfo.setSpaceType(SpaceTypeEnum.getEnumTextByValue(space.getSpaceType()));
         spaceInfo.setSpaceLevel(SpaceLevelEnum.getEnumTextByValue(space.getSpaceLevel()));
         return spaceInfo;
+    }
+
+    @Override
+    public List<Space> listMyOwnSpace(Long userId) {
+        return this.lambdaQuery().eq(Space::getUserId, userId).list();
+    }
+
+    @Override
+    public List<Space> listMyJoinSpaceByUserId(Long userId) {
+        SpaceUserQueryRequest spaceUserQueryRequest = new SpaceUserQueryRequest();
+        spaceUserQueryRequest.setUserId(userId);
+        spaceUserQueryRequest.setSpaceRole(SpaceRoleEnum.EDITOR.getValue());
+        List<SpaceUser> spaceUserList = spaceUserService.list(spaceUserService.getQueryWrapper(spaceUserQueryRequest));
+        if (spaceUserList.isEmpty()){
+            return new ArrayList<>();
+        }
+        ArrayList<Long> spaceIdList = new ArrayList<>();
+        spaceUserList.forEach(spaceUser -> {
+            spaceIdList.add(spaceUser.getSpaceId());
+        });
+        List<Space> spaceList = this.listByIds(spaceIdList);
+        return spaceList;
     }
 
     @Override

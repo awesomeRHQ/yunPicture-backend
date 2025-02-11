@@ -9,7 +9,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/yun_picture
     username: root
-    password: ren440402
+    password: 123456
   mvc:
     pathmatch:
       matching-strategy: ant_path_matcher
@@ -33,3 +33,11 @@ knife4j:
         api-rule: package
         api-rule-resources:
           - com.awesome.yunpicturebackend.controller
+# COS对象存储配置
+cos:
+  client:
+    host: xxxxx
+    secretId: xxxxx
+    secretKey: xxxxx
+    region: xxxxx
+    bucket: xxxxx

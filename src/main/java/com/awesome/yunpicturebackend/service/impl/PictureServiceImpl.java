@@ -27,6 +27,7 @@ import com.awesome.yunpicturebackend.service.SpaceService;
 import com.awesome.yunpicturebackend.service.UserService;
 import com.awesome.yunpicturebackend.util.ColorSimilarityUtil;
 import com.awesome.yunpicturebackend.util.StringUtil;
+import com.awesome.yunpicturebackend.util.ValidateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -42,6 +43,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -108,9 +110,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             spaceId = 0L;
         }
         // 2.图片上传
-        // 2.1指定用户上传文件
-        String publicPathPrefix = "/public";
-        String userUpdatePathPrefix = publicPathPrefix + '/' + loginUser.getId();
+        // 指定用户上传文件
+        String uploadPathPrefix = "/public";
+        // 如果是空间内上传，则存储到space目录下
+        if (!ValidateUtil.isNullOrNotPositive(pictureUploadRequest.getSpaceId())){
+            uploadPathPrefix = "/space/" + pictureUploadRequest.getSpaceId();
+        }
+        String userUpdatePathPrefix = uploadPathPrefix + '/' + loginUser.getId();
         UploadPictureResult uploadPictureResult = null;
         StringBuilder uploadSource = new StringBuilder();
         if (inputSource instanceof MultipartFile) {
@@ -124,69 +130,109 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         }
         ThrowUtil.throwIf(uploadPictureResult == null, ResponseCode.SYSTEM_ERROR);
         // 3.处理结果
-        Picture picture = new Picture();
-        picture.setName(uploadPictureResult.getName());
-        picture.setUserId(loginUser.getId());
-        picture.setSpaceId(spaceId);
-        // 若指定了空间Id，则图片默认为不公开的
-        if (spaceId > 0){
-            picture.setDoPub(0);
+        Long pictureId = pictureUploadRequest.getPictureId();
+
+        // 更新
+        if (!ValidateUtil.isNullOrNotPositive(pictureId)) {
+            Picture picture = this.getById(pictureId);
+            String oldUrl = picture.getUrl();
+            String oldCompressUrl = picture.getCompressUrl();
+            // 更新后的数据
+            picture.setUrl(uploadPictureResult.getUrl());
+            picture.setCompressUrl(uploadPictureResult.getCompressUrl());
+            picture.setPicSize(uploadPictureResult.getPicSize());
+            picture.setPicWidth(uploadPictureResult.getPicWidth());
+            picture.setPicHeight(uploadPictureResult.getPicHeight());
+            picture.setPicScale(uploadPictureResult.getPicScale());
+            picture.setPicFormat(uploadPictureResult.getPicFormat());
+            picture.setPicColor(uploadPictureResult.getPicColor());
+            // 使用事务
+            transactionTemplate.execute( status -> {
+                // 保存图片
+                boolean pictureSaveResult = this.updateById(picture);
+                ThrowUtil.throwIf(!pictureSaveResult, ResponseCode.OPERATION_ERROR, "图片保存失败");
+                // 删除COS中的旧图片
+                // 原图url
+                if (StrUtil.isNotBlank(oldUrl)) {
+                    String oldPictureUrlKey = StringUtil.getTruncatedString(oldUrl, cosClientConfig.getHost() + "/");
+                    cosClient.deleteObject(cosClientConfig.getBucket(), oldPictureUrlKey);
+                }
+                // 压缩图url
+                if (StrUtil.isNotBlank(oldCompressUrl)) {
+                    String oldPictureCompressUrlKey = StringUtil.getTruncatedString(oldCompressUrl, cosClientConfig.getHost() + "/");
+                    cosClient.deleteObject(cosClientConfig.getBucket(), oldPictureCompressUrlKey);
+                }
+                return picture;
+            });
+            return this.getPictureVO(picture);
         } else {
-            picture.setDoPub(1);
-        }
-        picture.setUrl(uploadPictureResult.getUrl());
-        picture.setCompressUrl(uploadPictureResult.getCompressUrl());
-        picture.setPicSize(uploadPictureResult.getPicSize());
-        picture.setPicWidth(uploadPictureResult.getPicWidth());
-        picture.setPicHeight(uploadPictureResult.getPicHeight());
-        picture.setPicScale(uploadPictureResult.getPicScale());
-        picture.setPicFormat(uploadPictureResult.getPicFormat());
-        picture.setPicColor(uploadPictureResult.getPicColor());
-        picture.setUploadSource(uploadSource.toString());
-        // 存在自定义图片信息，则选择自定义信息
-        if (pictureUploadRequest != null) {
-            String pictureName = pictureUploadRequest.getPictureName();
-            String category = pictureUploadRequest.getCategory();
-            List<String> tagList = pictureUploadRequest.getTagList();
-            if (StrUtil.isNotBlank(pictureName)) {
-                picture.setName(pictureName);
-            }
-            if (StrUtil.isNotBlank(category)) {
-                picture.setCategory(category);
-            }
-            if (CollUtil.isNotEmpty(tagList)) {
-                picture.setTags(JSONUtil.toJsonStr(tagList));
-            }
-        } else {
+            Picture picture = new Picture();
             picture.setName(uploadPictureResult.getName());
-        }
-        // 设置审核状态
-        // 若当前图片创建人为管理员
-        if (UserRoleEnum.ADMIN.getValue().equals(loginUser.getUserRole())) {
-            // 则直接审核通过
-            this.setReviewStatue(picture, 0, "", loginUser.getId());
-        } else {
-            // 否则走审核
-            this.setReviewStatue(picture, 0, "", 0L);
-        }
-        // 使用事务
-        Long finalSpaceId = spaceId;
-        transactionTemplate.execute( status -> {
-            // 保存图片
-            boolean pictureSaveResult = this.save(picture);
-            ThrowUtil.throwIf(!pictureSaveResult, ResponseCode.OPERATION_ERROR, "图片保存失败");
-            // 更新空间
-            if (finalSpaceId > 0L) {
-                boolean spaceUpdateResult = spaceService.lambdaUpdate()
-                        .eq(Space::getId, finalSpaceId)
-                        .setSql("totalSize = totalSize + " + picture.getPicSize())
-                        .setSql("totalCount = totalCount + 1")
-                        .update();
-                ThrowUtil.throwIf(!spaceUpdateResult, ResponseCode.OPERATION_ERROR,"空间额度更新失败");
+            picture.setUserId(loginUser.getId());
+            picture.setSpaceId(spaceId);
+            // 若指定了空间Id，则图片默认为不公开的
+            if (spaceId > 0){
+                picture.setDoPub(0);
+            } else {
+                picture.setDoPub(1);
             }
-            return picture;
-        });
-        return this.getPictureVO(picture);
+            picture.setUrl(uploadPictureResult.getUrl());
+            picture.setCompressUrl(uploadPictureResult.getCompressUrl());
+            picture.setPicSize(uploadPictureResult.getPicSize());
+            picture.setPicWidth(uploadPictureResult.getPicWidth());
+            picture.setPicHeight(uploadPictureResult.getPicHeight());
+            picture.setPicScale(uploadPictureResult.getPicScale());
+            picture.setPicFormat(uploadPictureResult.getPicFormat());
+            picture.setPicColor(uploadPictureResult.getPicColor());
+            picture.setUploadSource(uploadSource.toString());
+            // 存在自定义图片信息，则选择自定义信息
+            if (pictureUploadRequest != null) {
+                String pictureName = pictureUploadRequest.getPictureName();
+                String category = pictureUploadRequest.getCategory();
+                List<String> tagList = pictureUploadRequest.getTagList();
+                if (StrUtil.isNotBlank(pictureName)) {
+                    picture.setName(pictureName);
+                }
+                if (StrUtil.isNotBlank(category)) {
+                    picture.setCategory(category);
+                }
+                if (CollUtil.isNotEmpty(tagList)) {
+                    picture.setTags(JSONUtil.toJsonStr(tagList));
+                }
+            } else {
+                picture.setName(uploadPictureResult.getName());
+            }
+            // 设置审核状态
+            // 若当前图片创建人为管理员
+            if (UserRoleEnum.ADMIN.getValue().equals(loginUser.getUserRole())) {
+                // 则直接审核通过
+                this.setReviewStatue(picture, 0, "", loginUser.getId());
+            } else {
+                // 否则走审核
+                this.setReviewStatue(picture, 0, "", 0L);
+            }
+            // 使用事务
+            Long finalSpaceId = spaceId;
+            transactionTemplate.execute( status -> {
+                // 保存图片
+                boolean pictureSaveResult = this.save(picture);
+                ThrowUtil.throwIf(!pictureSaveResult, ResponseCode.OPERATION_ERROR, "图片保存失败");
+                // 更新空间
+                if (finalSpaceId > 0L) {
+                    boolean spaceUpdateResult = spaceService.lambdaUpdate()
+                            .eq(Space::getId, finalSpaceId)
+                            .setSql("totalSize = totalSize + " + picture.getPicSize())
+                            .setSql("totalCount = totalCount + 1")
+                            .update();
+                    ThrowUtil.throwIf(!spaceUpdateResult, ResponseCode.OPERATION_ERROR,"空间额度更新失败");
+                }
+                return picture;
+            });
+            return this.getPictureVO(picture);
+        }
+
+
+
     }
 
     /**
@@ -513,8 +559,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             });
         }
         pictureQueryWrapper.eq(userId != null && userId > 0, "userId", userId);
-        pictureQueryWrapper.eq(spaceId > 0 ,"spaceId", spaceId);
-        pictureQueryWrapper.eq(doPub >= 0,"doPub", doPub);
+        pictureQueryWrapper.eq(!ValidateUtil.isNullOrNotPositive(spaceId) ,"spaceId", spaceId);
+        pictureQueryWrapper.eq(doPub != null && doPub >= 0,"doPub", doPub);
         pictureQueryWrapper.orderBy(StrUtil.isNotBlank(sortField), SortOrderEnum.ASC.getValue().equals(sortOrder), sortField);
 
         return pictureQueryWrapper;

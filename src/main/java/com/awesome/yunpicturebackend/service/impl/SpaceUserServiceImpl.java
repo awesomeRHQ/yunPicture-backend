@@ -39,6 +39,9 @@ import java.util.Objects;
 public class SpaceUserServiceImpl extends ServiceImpl<SpaceUserMapper, SpaceUser> implements SpaceUserService {
 
     @Resource
+    private SpaceUserMapper spaceUserMapper;
+
+    @Resource
     private SpaceService spaceService;
 
     @Resource
@@ -52,10 +55,16 @@ public class SpaceUserServiceImpl extends ServiceImpl<SpaceUserMapper, SpaceUser
         Long userId = spaceUserAddRequest.getUserId();
         ThrowUtil.throwIf(ValidateUtil.isNullOrNotPositive(spaceId), ResponseCode.PARAMS_ERROR);
         ThrowUtil.throwIf(ValidateUtil.isNullOrNotPositive(userId), ResponseCode.PARAMS_ERROR);
-        // 2.检查空间是否存在该角色
-        boolean exists = this.lambdaQuery().eq(SpaceUser::getSpaceId, spaceId).eq(SpaceUser::getUserId, userId).exists();
-        if (exists) {
-            throw new BusinessException(ResponseCode.OPERATION_ERROR,"当前角色已存在");
+        // 2.检查用户信息
+        // 检查是否存在该用户
+        boolean userExists = userService.lambdaQuery().eq(User::getId, userId).exists();
+        if (!userExists) {
+            throw new BusinessException(ResponseCode.OPERATION_ERROR,"用户不存在");
+        }
+        // 检查空间是否存在该用户
+        boolean spaceUserExists = this.lambdaQuery().eq(SpaceUser::getSpaceId, spaceId).eq(SpaceUser::getUserId, userId).exists();
+        if (spaceUserExists) {
+            throw new BusinessException(ResponseCode.OPERATION_ERROR,"用户已存在当前团队中");
         }
         // 3.插入数据
         SpaceUser spaceUser = new SpaceUser();
@@ -64,7 +73,7 @@ public class SpaceUserServiceImpl extends ServiceImpl<SpaceUserMapper, SpaceUser
     }
 
     @Override
-    public List<SpaceUser> getSpaceUserBySpaceId(Long spaceId) {
+    public List<SpaceUser> listSpaceUserBySpaceId(Long spaceId) {
         if (ValidateUtil.isNullOrNotPositive(spaceId)) {
             throw new BusinessException(ResponseCode.PARAMS_ERROR);
         }
@@ -72,52 +81,27 @@ public class SpaceUserServiceImpl extends ServiceImpl<SpaceUserMapper, SpaceUser
     }
 
     @Override
-    public List<SpaceUserVO> getSpaceUserVOBySpaceId(Long spaceId) {
-        if (ValidateUtil.isNullOrNotPositive(spaceId)) {
+    public List<SpaceUser> listSpaceUser(SpaceUserQueryRequest spaceUserQueryRequest) {
+        if (Objects.isNull(spaceUserQueryRequest)) {
             throw new BusinessException(ResponseCode.PARAMS_ERROR);
         }
-        List<SpaceUser> spaceUserList = getSpaceUserBySpaceId(spaceId);
-        if (spaceUserList.isEmpty()){
-            return new ArrayList<>();
-        }
-        ArrayList<SpaceUserVO> spaceUserVOList = new ArrayList<>();
-        spaceUserList.forEach(spaceUser -> {
-            // 遍历空间角色列表，构造空间角色详细信息结点
-            SpaceUserVO spaceUserVO = new SpaceUserVO();
-            BeanUtils.copyProperties(spaceUser, spaceUserVO);
-            // 根据spaceId获取spaceInfo
-            SpaceInfo spaceInfo = spaceService.getSpaceInfoBySpaceId(spaceId);
-            spaceUserVO.setSpaceInfo(spaceInfo);
-            // 根据userId获取userVO
-            UserVO userVO = userService.getUserVO(spaceUser.getUserId());
-            spaceUserVO.setUserVO(userVO);
-            // 根据userId获取userVO
-            spaceUserVOList.add(spaceUserVO);
-        });
-        return spaceUserVOList;
+        return spaceUserMapper.listSpaceUser(spaceUserQueryRequest);
     }
 
     @Override
-    public List<SpaceUserInfo> getSpaceUserInfoByUserId(Long spaceId) {
-        if (ValidateUtil.isNullOrNotPositive(spaceId)) {
+    public List<SpaceUserVO> listSpaceUserVO(SpaceUserQueryRequest spaceUserQueryRequest) {
+        if (Objects.isNull(spaceUserQueryRequest)) {
             throw new BusinessException(ResponseCode.PARAMS_ERROR);
         }
-        List<SpaceUser> spaceUserList = getSpaceUserBySpaceId(spaceId);
-        if (spaceUserList.isEmpty()){
-            return new ArrayList<>();
+        return spaceUserMapper.listSpaceUserVO(spaceUserQueryRequest);
+    }
+
+    @Override
+    public List<SpaceUserInfo> listSpaceUserInfo(SpaceUserQueryRequest spaceUserQueryRequest) {
+        if (Objects.isNull(spaceUserQueryRequest)) {
+            throw new BusinessException(ResponseCode.PARAMS_ERROR);
         }
-        ArrayList<SpaceUserInfo> spaceUserInfoList = new ArrayList<>();
-        spaceUserList.forEach(spaceUser -> {
-            // 遍历空间角色列表，构造空间角色详细信息结点
-            SpaceUserInfo spaceUserInfo = new SpaceUserInfo();
-            BeanUtils.copyProperties(spaceUser, spaceUserInfo);
-            // 根据userId获取userVO
-            UserVO userVO = userService.getUserVO(spaceUser.getUserId());
-            spaceUserInfo.setUserVO(userVO);
-            // 根据userId获取userVO
-            spaceUserInfoList.add(spaceUserInfo);
-        });
-        return spaceUserInfoList;
+        return spaceUserMapper.listSpaceUserInfo(spaceUserQueryRequest);
     }
 
     @Override
@@ -164,8 +148,8 @@ public class SpaceUserServiceImpl extends ServiceImpl<SpaceUserMapper, SpaceUser
         return this.lambdaQuery()
                 .eq(SpaceUser::getSpaceId, spaceId)
                 .eq(SpaceUser::getUserId, userId)
-                .select(SpaceUser::getSpaceRole)
-                .getSqlSelect();
+                .one()
+                .getSpaceRole();
     }
 
     @Override

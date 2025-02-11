@@ -11,7 +11,7 @@ public class ModuleRolePermissions implements Serializable {
     /**
      * 模块名
      */
-    private String model;
+    private String module;
 
     /**
      * 角色权限列表

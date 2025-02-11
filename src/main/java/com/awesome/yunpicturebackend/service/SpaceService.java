@@ -3,11 +3,15 @@ package com.awesome.yunpicturebackend.service;
 import com.awesome.yunpicturebackend.model.dto.space.SpaceAddRequest;
 import com.awesome.yunpicturebackend.model.dto.space.SpaceQueryRequest;
 import com.awesome.yunpicturebackend.model.entity.Space;
+import com.awesome.yunpicturebackend.model.entity.SpaceUser;
 import com.awesome.yunpicturebackend.model.entity.User;
 import com.awesome.yunpicturebackend.model.vo.space.SpaceInfo;
 import com.awesome.yunpicturebackend.model.vo.space.SpaceVO;
+import com.awesome.yunpicturebackend.model.vo.spaceuser.SpaceUserVO;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.IService;
+
+import java.util.List;
 
 /**
  * 针对表【space(空间)】的服务Service
@@ -64,6 +68,20 @@ public interface SpaceService extends IService<Space> {
      * @return 空间基本信息
      */
     SpaceInfo getSpaceInfoBySpaceId(Long spaceId);
+
+    /**
+     * 获取我（拥有）的空间
+     * @param userId 用户Id
+     * @return 用户空间列表
+     */
+    List<Space> listMyOwnSpace(Long userId);
+
+    /**
+     * 获取我（加入）的空间
+     * @param userId 用户Id
+     * @return 用户加入空间列表
+     */
+    List<Space> listMyJoinSpaceByUserId(Long userId);
 
     /**
      * 构造QueryWrapper

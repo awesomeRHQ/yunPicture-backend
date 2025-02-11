@@ -5,6 +5,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.awesome.yunpicturebackend.annotation.AuthCheck;
+import com.awesome.yunpicturebackend.annotation.ModulePermissionCheck;
 import com.awesome.yunpicturebackend.common.BaseResponse;
 import com.awesome.yunpicturebackend.common.DeleteRequest;
 import com.awesome.yunpicturebackend.common.ResponseCode;
@@ -51,7 +52,8 @@ public class PictureController {
     /**
      * 上传图片
      */
-    @PostMapping("/upload")
+    @ModulePermissionCheck
+    @PostMapping("/add/upload")
     public BaseResponse<PictureVO> uploadPictureByFile(
             @RequestPart MultipartFile multipartFile,
             PictureUploadRequest pictureUploadRequest,
@@ -64,7 +66,8 @@ public class PictureController {
     /**
      * 上传图片
      */
-    @PostMapping("/upload/url")
+    @ModulePermissionCheck
+    @PostMapping("/add/upload/url")
     public BaseResponse<PictureVO> uploadPictureByUrl(
             @RequestParam String pictureUrl,
             PictureUploadRequest pictureUploadRequest,
@@ -74,11 +77,22 @@ public class PictureController {
         return ResultUtil.success(pictureVO);
     }
 
+    @ModulePermissionCheck
+    @PostMapping("/update/upload")
+    public BaseResponse<PictureVO> updatePictureByFile(
+            @RequestPart MultipartFile multipartFile,
+            PictureUploadRequest pictureUploadRequest,
+            HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        PictureVO pictureVO = pictureService.uploadPicture(multipartFile, loginUser,pictureUploadRequest);
+        return ResultUtil.success(pictureVO);
+    }
+
     /**
      * 管理员批量爬取导入图片
      */
-    @PostMapping("/upload/batch")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @ModulePermissionCheck
+    @PostMapping("/manage/upload/batch")
     public BaseResponse<Integer> uploadPictureByBatch(
             @RequestBody PictureUploadByBatchRequest pictureUploadByBatchRequest,
             HttpServletRequest request
@@ -96,6 +110,7 @@ public class PictureController {
     /**
      * 删除单张图片
      */
+    @ModulePermissionCheck
     @PostMapping("/delete")
     public BaseResponse<Boolean> deletePicture(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
@@ -114,6 +129,7 @@ public class PictureController {
     /**
      * 批量删除图片
      */
+    @ModulePermissionCheck
     @PostMapping("/delete/pictures")
     public BaseResponse<Boolean> deletePictures(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
@@ -135,7 +151,7 @@ public class PictureController {
     /**
      * 更新图片（管理员）
      */
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @ModulePermissionCheck
     @PostMapping("/update")
     public BaseResponse<Boolean> updatePicture(@RequestBody PictureUpdateRequest pictureUpdateRequest, HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
@@ -155,8 +171,9 @@ public class PictureController {
     /**
      * 更新图片（普通用户）
      */
+    @ModulePermissionCheck
     @PostMapping("/edit")
-    public BaseResponse<Boolean> updatePicture(@RequestBody PictureEditRequest pictureEditRequest, HttpServletRequest request) {
+    public BaseResponse<Boolean> editPicture(@RequestBody PictureEditRequest pictureEditRequest, HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
         ThrowUtil.throwIf(loginUser == null, ResponseCode.NOT_LOGIN_ERROR);
         ThrowUtil.throwIf(pictureEditRequest == null , ResponseCode.PARAMS_ERROR);
@@ -174,8 +191,8 @@ public class PictureController {
     /**
      *
      */
-    @AuthCheck(mustRole = "admin")
-    @PostMapping("/page")
+    @ModulePermissionCheck
+    @PostMapping("/manage/page")
     public BaseResponse<Page<Picture>> pagePicture(@RequestBody PictureAdminQueryRequest pictureAdminQueryRequest) {
         ThrowUtil.throwIf(pictureAdminQueryRequest == null , ResponseCode.PARAMS_ERROR);
         int current = pictureAdminQueryRequest.getCurrent();
@@ -186,9 +203,9 @@ public class PictureController {
     }
 
     /**
-     * 获取图片分页数据
+     * 获取图片VO分页数据
      */
-    @PostMapping("/page/vo")
+    @PostMapping("/read/page/vo")
     public BaseResponse<Page<PictureVO>> pagePictureVO(@RequestBody PictureQueryRequest pictureQueryRequest) {
         ThrowUtil.throwIf(pictureQueryRequest == null , ResponseCode.PARAMS_ERROR);
         int current = pictureQueryRequest.getCurrent();
@@ -203,7 +220,7 @@ public class PictureController {
     /**
      * 获取用户个人空间图片分页数据
      */
-    @PostMapping("/page/personal/vo")
+    @PostMapping("/read/page/personal/vo")
     public BaseResponse<Page<PictureVO>> pagePersonalPictureVO(@RequestBody PicturePersonalQueryRequest picturePersonalQueryRequest) {
         ThrowUtil.throwIf(picturePersonalQueryRequest == null , ResponseCode.PARAMS_ERROR);
         int current = picturePersonalQueryRequest.getCurrent();
@@ -216,7 +233,7 @@ public class PictureController {
         return ResultUtil.success(pictureVOPage);
     }
 
-    @PostMapping("/batch/vo")
+    @PostMapping("/read/batch/vo")
     public BaseResponse<List<PictureVO>> listPictureVOBatch(@RequestBody PictureQueryRequest pictureQueryRequest ,HttpServletRequest request) {
         ThrowUtil.throwIf(pictureQueryRequest == null , ResponseCode.PARAMS_ERROR);
         int pageSize = pictureQueryRequest.getPageSize();
@@ -233,7 +250,7 @@ public class PictureController {
         }
     }
 
-    @GetMapping("/get/vo")
+    @GetMapping("/read/vo")
     public BaseResponse<PictureVO> getPictureVOById(@RequestParam Long id) {
         ThrowUtil.throwIf(id == null , ResponseCode.PARAMS_ERROR);
         Picture picture = pictureService.getById(id);
@@ -249,7 +266,8 @@ public class PictureController {
         return ResultUtil.success(pictureTagCategory);
     }
 
-    @PostMapping("/review")
+    @ModulePermissionCheck
+    @PostMapping("/manage/review")
     public BaseResponse<Boolean> doReview(@RequestBody PictureReviewRequest pictureReviewRequest, HttpServletRequest request) {
         // 获取校验信息
         ThrowUtil.throwIf(pictureReviewRequest == null , ResponseCode.PARAMS_ERROR);
